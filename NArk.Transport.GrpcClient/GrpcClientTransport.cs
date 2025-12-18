@@ -8,11 +8,13 @@ namespace NArk.Transport.GrpcClient;
 
 public partial class GrpcClientTransport: IClientTransport
 {
-    private readonly ArkService.ArkServiceClient _client;
+    private readonly ArkService.ArkServiceClient _serviceClient;
+    private readonly IndexerService.IndexerServiceClient _indexerServiceClient;
 
     public GrpcClientTransport(string uri)
     {
         var channel = GrpcChannel.ForAddress(uri);
-        _client = new ArkService.ArkServiceClient(channel);
+        _serviceClient = new ArkService.ArkServiceClient(channel);
+        _indexerServiceClient = new IndexerService.IndexerServiceClient(channel);
     }
 }

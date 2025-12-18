@@ -15,7 +15,7 @@ public partial class GrpcClientTransport
 
     public async Task<ArkServerInfo> GetServerInfoAsync(CancellationToken cancellationToken = default)
     {
-        var response = await _client.GetInfoAsync(new GetInfoRequest(), cancellationToken: cancellationToken);
+        var response = await _serviceClient.GetInfoAsync(new GetInfoRequest(), cancellationToken: cancellationToken);
         var network =
             response.Network switch
             {
