@@ -53,7 +53,9 @@ public class HashLockedArkPaymentContract(
         if (User != null)
             data["user"] = User.ToString();
         
-        data["server"] = Server.ToString();
+        // ArkNote actually doesn't have the Server Key :(
+        if (Server != null)
+            data["server"] = Server.ToString();
 
         return data;
     }

@@ -6,9 +6,9 @@ using NBitcoin.Secp256k1;
 
 namespace NArk.Contracts;
 
-public abstract class ArkContract
+public abstract class ArkContract(OutputDescriptor server)
 {
-    public static readonly List<IArkContractParser> Parsers = [];
+    private static readonly List<IArkContractParser> Parsers = [];
 
     static ArkContract()
     {
@@ -35,7 +35,7 @@ public abstract class ArkContract
                 throw new ArgumentException("Contract type is missing in the contract data");
     }
 
-    public static ArkContract? Parse(string type, Dictionary<string, string> contractData, Network network)
+    private static ArkContract? Parse(string type, Dictionary<string, string> contractData, Network network)
     {
         return Parsers.FirstOrDefault(parser => parser.Type == type)?
             .Parse(contractData, network); // Ensure the Payment parser is registered
@@ -43,19 +43,14 @@ public abstract class ArkContract
 
     public abstract string Type { get; }
 
-    public OutputDescriptor Server { get; }
-
-    protected ArkContract(OutputDescriptor server)
-    {
-        Server = server;
-    }
+    public OutputDescriptor Server { get; } = server;
 
     public ArkAddress GetArkAddress()
     {
         var spendInfo = GetTaprootSpendInfo();
         return new ArkAddress(
             ECXOnlyPubKey.Create(spendInfo.OutputPubKey.ToBytes()),
-            Server?.ToXOnlyPubKey() ?? throw new InvalidOperationException("Server key is required for address generation")
+            Server.ToXOnlyPubKey() ?? throw new InvalidOperationException("Server key is required for address generation")
         );
     }
 
