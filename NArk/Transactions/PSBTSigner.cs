@@ -6,7 +6,7 @@ namespace NArk.Transactions;
 
 public class ArkPsbtSigner(ArkCoin    coin, ISigningEntity signingEntity)
 {
-    /*
+    
     public void SignAndFillPsbt(
         PSBT psbt,
         TaprootReadyPrecomputedTransactionData precomputedTransactionData,
@@ -29,5 +29,4 @@ public class ArkPsbtSigner(ArkCoin    coin, ISigningEntity signingEntity)
 
         psbtInput.SetTaprootScriptSpendSignature(ourKey, coin.SpendingScript.LeafHash, sig);
     }
-    */
 }

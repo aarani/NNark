@@ -1,5 +1,6 @@
 // Copied from https://github.com/MetacoSA/NBitcoin/blob/ff39fcd83dbe5c7556c48b9a960d736018f0102f/NBitcoin/ScriptEvaluationContext.cs#L231
 
+#nullable disable
 namespace NArk.Helpers;
 
 internal class CScriptNum

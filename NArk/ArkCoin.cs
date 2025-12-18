@@ -1,3 +1,4 @@
+using NArk.Contracts;
 using NArk.Helpers;
 using NArk.Scripts;
 using NBitcoin;
@@ -6,7 +7,7 @@ namespace NArk;
 
 public class ArkCoin : Coin
 {
-    public ArkCoin(object contract,
+    public ArkCoin(ArkContract contract,
         DateTimeOffset? expiresAt,
         uint? expiresAtHeight,
         OutPoint outPoint,
@@ -32,7 +33,7 @@ public class ArkCoin : Coin
         }
     }
 
-    private object Contract { get; }
+    private ArkContract Contract { get; }
     private DateTimeOffset? ExpiresAt { get; }
     private uint? ExpiresAtHeight { get; }
     private ScriptBuilder SpendingScriptBuilder { get; }
@@ -42,7 +43,7 @@ public class ArkCoin : Coin
     private bool Recoverable { get; }
     
     public TapScript SpendingScript => SpendingScriptBuilder.Build();
-    /*
+    
     public PSBTInput? FillPsbtInput(PSBT psbt)
     {
         var psbtInput = psbt.Inputs.FindIndexedInput(Outpoint);
@@ -60,5 +61,4 @@ public class ArkCoin : Coin
 
         return psbtInput;
     }
-    */
 }
