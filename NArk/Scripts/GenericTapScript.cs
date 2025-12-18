@@ -1,0 +1,15 @@
+﻿using NBitcoin;
+
+namespace NArk.Scripts;
+
+public class GenericTapScript(IEnumerable<Op> ops) : ScriptBuilder
+{
+    public GenericTapScript(TapScript script) : this(script.Script.ToOps())
+    {
+    }
+
+    public override IEnumerable<Op> BuildScript()
+    {
+        return ops;
+    }
+}
