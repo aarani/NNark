@@ -12,10 +12,10 @@ public class VtxoSynchronizationServiceTests
     [Test]
     public void VtxoSynchronizationService_ReceivesContractsList()
     {
-        var walletStorage = NSubstitute.Substitute.For<IWalletStorage>();
-        var vtxoStorage = NSubstitute.Substitute.For<IVtxoStorage>();
-        var contractStorage = NSubstitute.Substitute.For<IContractStorage>();
-        var arkClientTransport = NSubstitute.Substitute.For<IClientTransport>();
+        var walletStorage = Substitute.For<IWalletStorage>();
+        var vtxoStorage = Substitute.For<IVtxoStorage>();
+        var contractStorage = Substitute.For<IContractStorage>();
+        var arkClientTransport = Substitute.For<IClientTransport>();
 
         walletStorage.LoadAllWallets()
             .Returns(new HashSet<ArkWallet>([new ArkWallet("wallet1", "wallet-fingerprint", [])]));
@@ -31,14 +31,14 @@ public class VtxoSynchronizationServiceTests
     [Test]
     public async Task VtxoSynchronizationService_ReceivesVtxosList()
     {
-        var walletStorage = NSubstitute.Substitute.For<IWalletStorage>();
-        var vtxoStorage = NSubstitute.Substitute.For<IVtxoStorage>();
-        var contractStorage = NSubstitute.Substitute.For<IContractStorage>();
-        var arkClientTransport = NSubstitute.Substitute.For<IClientTransport>();
+        var walletStorage = Substitute.For<IWalletStorage>();
+        var vtxoStorage = Substitute.For<IVtxoStorage>();
+        var contractStorage = Substitute.For<IContractStorage>();
+        var arkClientTransport = Substitute.For<IClientTransport>();
 
         walletStorage.LoadAllWallets()
             .Returns(new HashSet<ArkWallet>([new ArkWallet("wallet1", "wallet-fingerprint", [])]));
-        contractStorage.LoadAllContracts("wallet1").Returns(new HashSet<ArkContractEntity>()
+        contractStorage.LoadAllContracts("wallet1").Returns(new HashSet<ArkContractEntity>
         {
             new(
                 "script1",
@@ -51,9 +51,9 @@ public class VtxoSynchronizationServiceTests
         });
         arkClientTransport
             .GetVtxoByScriptsAsSnapshot(
-                Arg.Is<IReadOnlySet<string>>(x => x.SetEquals(new List<string>() { "script1" })),
+                Arg.Is<IReadOnlySet<string>>(x => x.SetEquals(new List<string> { "script1" })),
                 Arg.Any<CancellationToken>())
-            .Returns((c) =>
+            .Returns(_ =>
             {
                 List<ArkVtxo> test =
                 [
@@ -62,13 +62,12 @@ public class VtxoSynchronizationServiceTests
                 return test.ToAsyncEnumerable();
             });
 
-        await using var service =
-            new VtxoSynchronizationService(walletStorage, vtxoStorage, contractStorage, arkClientTransport);
-        service.Start().Wait();
-        await service.DisposeAsync();
-        walletStorage.Received(1).LoadAllWallets();
-        contractStorage.Received(1).LoadAllContracts(Arg.Is("wallet1"));
-        arkClientTransport.Received(1).GetVtxoByScriptsAsSnapshot(
+        await using (var service =
+                     new VtxoSynchronizationService(walletStorage, vtxoStorage, contractStorage, arkClientTransport))
+            service.Start().Wait();
+        _ = walletStorage.Received(1).LoadAllWallets();
+        _ = contractStorage.Received(1).LoadAllContracts(Arg.Is("wallet1"));
+        _ = arkClientTransport.Received(1).GetVtxoByScriptsAsSnapshot(
             Arg.Any<IReadOnlySet<string>>(),
             Arg.Any<CancellationToken>());
     }
@@ -76,14 +75,14 @@ public class VtxoSynchronizationServiceTests
     [Test]
     public async Task VtxoSynchronizationService_UpdateOnStreamTriggersSecondPoll()
     {
-        var walletStorage = NSubstitute.Substitute.For<IWalletStorage>();
-        var vtxoStorage = NSubstitute.Substitute.For<IVtxoStorage>();
-        var contractStorage = NSubstitute.Substitute.For<IContractStorage>();
-        var arkClientTransport = NSubstitute.Substitute.For<IClientTransport>();
+        var walletStorage = Substitute.For<IWalletStorage>();
+        var vtxoStorage = Substitute.For<IVtxoStorage>();
+        var contractStorage = Substitute.For<IContractStorage>();
+        var arkClientTransport = Substitute.For<IClientTransport>();
 
         walletStorage.LoadAllWallets()
             .Returns(new HashSet<ArkWallet>([new ArkWallet("wallet1", "wallet-fingerprint", [])]));
-        contractStorage.LoadAllContracts("wallet1").Returns(new HashSet<ArkContractEntity>()
+        contractStorage.LoadAllContracts("wallet1").Returns(new HashSet<ArkContractEntity>
         {
             new(
                 "script1",
@@ -96,9 +95,9 @@ public class VtxoSynchronizationServiceTests
         });
         arkClientTransport
             .GetVtxoByScriptsAsSnapshot(
-                Arg.Is<IReadOnlySet<string>>(x => x.SetEquals(new List<string>() { "script1" })),
+                Arg.Is<IReadOnlySet<string>>(x => x.SetEquals(new List<string> { "script1" })),
                 Arg.Any<CancellationToken>())
-            .Returns((c) =>
+            .Returns(_ =>
             {
                 List<ArkVtxo> test =
                 [
@@ -108,36 +107,36 @@ public class VtxoSynchronizationServiceTests
             });
 
         arkClientTransport
-            .GetVtxoToPollAsStream(Arg.Is<IReadOnlySet<string>>(x => x.SetEquals(new List<string>() { "script1" })),
+            .GetVtxoToPollAsStream(Arg.Is<IReadOnlySet<string>>(x => x.SetEquals(new List<string> { "script1" })),
                 Arg.Any<CancellationToken>())
-            .Returns((c) =>
+            .Returns(_ =>
             {
-                var test = new[] { new HashSet<string>() { "script1" } };
+                var test = new[] { new HashSet<string> { "script1" } };
                 return test.ToAsyncEnumerable();
             });
 
-        await using var service =
-            new VtxoSynchronizationService(walletStorage, vtxoStorage, contractStorage, arkClientTransport);
-        service.Start().Wait();
-        await service.DisposeAsync();
-        walletStorage.Received(1).LoadAllWallets();
-        contractStorage.Received(1).LoadAllContracts(Arg.Is("wallet1"));
+        await using (var service =
+                     new VtxoSynchronizationService(walletStorage, vtxoStorage, contractStorage, arkClientTransport))
+            await service.Start();
+
+        _ = walletStorage.Received(1).LoadAllWallets();
+        _ = contractStorage.Received(1).LoadAllContracts(Arg.Is("wallet1"));
         arkClientTransport.Received(2).GetVtxoByScriptsAsSnapshot(
-            Arg.Is<IReadOnlySet<string>>(x => x.SetEquals(new List<string>() { "script1" })),
+            Arg.Is<IReadOnlySet<string>>(x => x.SetEquals(new List<string> { "script1" })),
             Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task VtxoSynchronizationService_ChangeContractTriggersThirdPoll()
     {
-        var walletStorage = NSubstitute.Substitute.For<IWalletStorage>();
-        var vtxoStorage = NSubstitute.Substitute.For<IVtxoStorage>();
-        var contractStorage = NSubstitute.Substitute.For<IContractStorage>();
-        var arkClientTransport = NSubstitute.Substitute.For<IClientTransport>();
+        var walletStorage = Substitute.For<IWalletStorage>();
+        var vtxoStorage = Substitute.For<IVtxoStorage>();
+        var contractStorage = Substitute.For<IContractStorage>();
+        var arkClientTransport = Substitute.For<IClientTransport>();
 
         walletStorage.LoadAllWallets()
             .Returns(new HashSet<ArkWallet>([new ArkWallet("wallet1", "wallet-fingerprint", [])]));
-        contractStorage.LoadAllContracts("wallet1").Returns(new HashSet<ArkContractEntity>()
+        contractStorage.LoadAllContracts("wallet1").Returns(new HashSet<ArkContractEntity>
         {
             new(
                 "script1",
@@ -150,9 +149,9 @@ public class VtxoSynchronizationServiceTests
         });
         arkClientTransport
             .GetVtxoByScriptsAsSnapshot(
-                Arg.Is<IReadOnlySet<string>>(x => x.SetEquals(new List<string>() { "script1" })),
+                Arg.Is<IReadOnlySet<string>>(x => x.SetEquals(new List<string> { "script1" })),
                 Arg.Any<CancellationToken>())
-            .Returns((c) =>
+            .Returns(_ =>
             {
                 List<ArkVtxo> test =
                 [
@@ -162,51 +161,51 @@ public class VtxoSynchronizationServiceTests
             });
 
         arkClientTransport
-            .GetVtxoToPollAsStream(Arg.Is<IReadOnlySet<string>>(x => x.SetEquals(new List<string>() { "script1" })),
+            .GetVtxoToPollAsStream(Arg.Is<IReadOnlySet<string>>(x => x.SetEquals(new List<string> { "script1" })),
                 Arg.Any<CancellationToken>())
-            .Returns((c) =>
+            .Returns(_ =>
             {
-                var test = new[] { new HashSet<string>() { "script1" } };
+                var test = new[] { new HashSet<string> { "script1" } };
                 return test.ToAsyncEnumerable();
             });
 
-        await using var service =
-            new VtxoSynchronizationService(walletStorage, vtxoStorage, contractStorage, arkClientTransport);
-        service.Start().Wait();
-
-        contractStorage.LoadAllContracts("wallet1").Returns(new HashSet<ArkContractEntity>()
+        await using (var service =
+                     new VtxoSynchronizationService(walletStorage, vtxoStorage, contractStorage, arkClientTransport))
         {
-            new(
-                "script1",
-                true,
-                "contract-type",
-                new Dictionary<string, string>(),
-                "wallet1",
-                DateTimeOffset.Now
-            ),
-            new(
-                "script2",
-                true,
-                "contract-type",
-                new Dictionary<string, string>(),
-                "wallet1",
-                DateTimeOffset.Now
-            )
-        });
+            await service.Start();
 
-        contractStorage.ContractsChanged += Raise.Event();
+            contractStorage.LoadAllContracts("wallet1").Returns(new HashSet<ArkContractEntity>
+            {
+                new(
+                    "script1",
+                    true,
+                    "contract-type",
+                    new Dictionary<string, string>(),
+                    "wallet1",
+                    DateTimeOffset.Now
+                ),
+                new(
+                    "script2",
+                    true,
+                    "contract-type",
+                    new Dictionary<string, string>(),
+                    "wallet1",
+                    DateTimeOffset.Now
+                )
+            });
 
-        await Task.Delay(1000);
+            contractStorage.ContractsChanged += Raise.Event();
 
-        await service.DisposeAsync();
+            await Task.Delay(1000);
+        }
 
-        walletStorage.Received(2).LoadAllWallets();
-        contractStorage.Received(2).LoadAllContracts(Arg.Is("wallet1"));
+        _ = walletStorage.Received(2).LoadAllWallets();
+        _ = contractStorage.Received(2).LoadAllContracts(Arg.Is("wallet1"));
         arkClientTransport.Received(2).GetVtxoByScriptsAsSnapshot(
-            Arg.Is<HashSet<string>>(x => x.SetEquals(new List<string>() { "script1" })),
+            Arg.Is<HashSet<string>>(x => x.SetEquals(new List<string> { "script1" })),
             Arg.Any<CancellationToken>());
         arkClientTransport.Received(1).GetVtxoByScriptsAsSnapshot(
-            Arg.Is<HashSet<string>>(x => x.SetEquals(new List<string>() { "script1", "script2" })),
+            Arg.Is<HashSet<string>>(x => x.SetEquals(new List<string> { "script1", "script2" })),
             Arg.Any<CancellationToken>());
     }
 }

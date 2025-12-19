@@ -28,7 +28,7 @@ public class SimpleSeedWallet(Network network, IWalletStorage walletStorage): IW
     
     public async Task<ISigningEntity> FindSigningEntity(OutputDescriptor outputDescriptor)
     {
-        var walletId = OutputDescriptorHelper.Extract(outputDescriptor).WalletId;
+        var walletId = OutputDescriptorHelpers.Extract(outputDescriptor).WalletId;
         var walletData = await walletStorage.LoadWallet(walletId);
         var mnemonic = new Mnemonic(Encoding.UTF8.GetString(walletData.WalletPrivateBytes));
         var extKey = mnemonic.DeriveExtKey();
@@ -84,7 +84,7 @@ public class SimpleSeedWallet(Network network, IWalletStorage walletStorage): IW
 
         private async Task<ECPrivKey> DerivePrivateKey(OutputDescriptor descriptor)
         {
-            var info = OutputDescriptorHelper.Extract(descriptor);
+            var info = OutputDescriptorHelpers.Extract(descriptor);
             
             if (info.WalletId != await GetFingerprint())
             {

@@ -3,7 +3,7 @@
 public class TransportTests
 {
     [Test]
-    public void CanConnecToMainnetArk()
+    public void CanConnectToMainnetArk()
     {
         var transport = new GrpcClientTransport("https://arkade.computer");
         Assert.DoesNotThrowAsync(async () => await transport.GetServerInfoAsync());

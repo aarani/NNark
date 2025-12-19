@@ -1,8 +1,11 @@
+using NBitcoin;
+
 namespace NArk.Abstractions.VTXOs;
 
 public interface IVtxoStorage
 {
     Task SaveVtxo(ArkVtxo vtxo);
+    Task<ArkVtxo> GetVtxoByOutPoint(OutPoint outpoint);
     Task<IEnumerable<ArkVtxo>> GetVtxosByScript(string script);
     Task<IEnumerable<ArkVtxo>> GetVtxosByWallet(string walletIdentifier);
     Task<IEnumerable<ArkVtxo>> GetUnspentVtxos();

@@ -1,4 +1,5 @@
 using NArk.Abstractions;
+using NArk.Abstractions.Intents;
 using NArk.Abstractions.VTXOs;
 
 namespace NArk.Transport;
@@ -9,4 +10,5 @@ public interface IClientTransport
     IAsyncEnumerable<HashSet<string>> GetVtxoToPollAsStream(IReadOnlySet<string> scripts, CancellationToken token = default);
     IAsyncEnumerable<ArkVtxo> GetVtxoByScriptsAsSnapshot(IReadOnlySet<string> scripts,
         CancellationToken cancellationToken = default);
+    Task<string> RegisterIntent(ArkIntent intent, CancellationToken cancellationToken = default);
 }
