@@ -71,7 +71,7 @@ public class VtxoSynchronizationService : IAsyncDisposable
             foreach (var wallet in wallets)
             {
                 var contracts = await _contractStorage.LoadAllContracts(wallet.WalletIdentifier);
-                newViewOfScripts = contracts.Select(c => c.Script).ToHashSet();
+                newViewOfScripts.UnionWith(contracts.Select(c => c.Script));
             }
 
             foreach (var vtxo in await _vtxoStorage.GetUnspentVtxos())
