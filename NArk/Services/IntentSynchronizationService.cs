@@ -7,7 +7,7 @@ using NArk.Transport;
 
 namespace NArk.Services;
 
-public class IntentManagementService(
+public class IntentSynchronizationService(
     IWallet wallet,
     IIntentStorage intentStorage,
     IVtxoStorage vtxoStorage,
