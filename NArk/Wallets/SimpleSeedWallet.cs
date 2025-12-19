@@ -13,10 +13,10 @@ public class SimpleSeedWallet(Network network, IWalletStorage walletStorage): IW
     {
         var mnemonic = new Mnemonic(Wordlist.English, WordCount.Twelve);
         var fingerprint = mnemonic.DeriveExtKey().GetPublicKey().GetHDFingerPrint();
-        await walletStorage.SaveWallet(walletIdentifier, new WalletData(walletIdentifier, fingerprint.ToString(), Encoding.UTF8.GetBytes(mnemonic.ToString())), fingerprint.ToString());
+        await walletStorage.SaveWallet(walletIdentifier, new ArkWallet(walletIdentifier, fingerprint.ToString(), Encoding.UTF8.GetBytes(mnemonic.ToString())), fingerprint.ToString());
     }
 
-    public async Task<ISigningEntity> GetSigningEntity(string walletIdentifier)
+    public async Task<ISigningEntity> GetNewSigningEntity(string walletIdentifier)
     {
         var walletData = await walletStorage.LoadWallet(walletIdentifier);
         var mnemonic = new Mnemonic(Encoding.UTF8.GetString(walletData.WalletPrivateBytes));
@@ -26,23 +26,40 @@ public class SimpleSeedWallet(Network network, IWalletStorage walletStorage): IW
         return signer;
     }
     
-    private class HdSigningEntity(ExtKey extKey, Network network, int index): ISigningEntity
+    public async Task<ISigningEntity> FindSigningEntity(OutputDescriptor outputDescriptor)
     {
-        public Dictionary<string, string> GetMetadata()
+        var walletId = OutputDescriptorHelper.Extract(outputDescriptor).WalletId;
+        var walletData = await walletStorage.LoadWallet(walletId);
+        var mnemonic = new Mnemonic(Encoding.UTF8.GetString(walletData.WalletPrivateBytes));
+        var extKey = mnemonic.DeriveExtKey();
+        var signer = new HdSigningEntity(extKey, network, walletData.LastAddressIndex);
+        return signer;
+    }
+    
+    private class HdSigningEntity(ExtKey extKey, OutputDescriptor descriptor): ISigningEntity
+    {
+        internal HdSigningEntity(ExtKey extKey, Network network, int index):
+            this(extKey, GetDescriptorFromIndex(extKey, network, index))
         {
-            return new Dictionary<string, string>
-            {
-                { "Descriptor", extKey.GetPublicKey().ToHex() },
-                { "Fingerprint", GetFingerprint() }
-            };
+            
+        }
+        
+        public async Task<Dictionary<string, string>> GetMetadata()
+        {
+            return
+                new Dictionary<string, string>
+                {
+                    { "Descriptor", extKey.GetPublicKey().ToHex() },
+                    { "Fingerprint", await GetFingerprint() }
+                };
         }
 
-        private string GetFingerprint()
+        public Task<string> GetFingerprint()
         {
-            return extKey.GetPublicKey().GetHDFingerPrint().ToString();
+            return Task.FromResult(extKey.GetPublicKey().GetHDFingerPrint().ToString());
         }
 
-        private OutputDescriptor GetDescriptor()
+        private static OutputDescriptor GetDescriptorFromIndex(ExtKey extKey, Network network, int index)
         {
             var fingerprint = extKey.GetPublicKey().GetHDFingerPrint();
             var coinType = network.ChainName == ChainName.Mainnet ? "0" : "1";
@@ -58,21 +75,18 @@ public class SimpleSeedWallet(Network network, IWalletStorage walletStorage): IW
             return OutputDescriptor.Parse(descriptor.Replace("/*", $"/{index}"), network);
         }
 
-        public SignResult SignData(uint256 data)
+        public async Task<SignResult> SignData(uint256 data)
         {
-            var key = DerivePrivateKey(GetDescriptor());
+            var key = await DerivePrivateKey(descriptor);
             var sig = key.SignBIP340(data.ToBytes());
             return new SignResult(sig, key.CreateXOnlyPubKey());
         }
 
-        private ECPrivKey DerivePrivateKey(OutputDescriptor descriptor)
+        private async Task<ECPrivKey> DerivePrivateKey(OutputDescriptor descriptor)
         {
             var info = OutputDescriptorHelper.Extract(descriptor);
-            var walletId =
-                info.AccountPath?.MasterFingerprint.ToString() ?? 
-                    Convert.ToHexStringLower(info.XOnlyPubKey.ToBytes());
             
-            if (walletId != GetFingerprint())
+            if (info.WalletId != await GetFingerprint())
             {
                 throw new Exception("invalid descriptor, cannot sign");
             }

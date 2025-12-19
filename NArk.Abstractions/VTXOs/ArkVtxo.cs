@@ -1,6 +1,6 @@
 using NBitcoin;
 
-namespace NArk;
+namespace NArk.Abstractions.VTXOs;
 
 public record ArkVtxo(
     string Script,

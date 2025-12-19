@@ -2,6 +2,7 @@ namespace NArk.Abstractions.Wallets;
 
 public interface IWalletStorage
 {
-    Task<WalletData> LoadWallet(string walletIdentifier);
-    Task SaveWallet(string walletId, WalletData walletData, string? walletFingerprint = null);
+    Task<IReadOnlySet<ArkWallet>> LoadAllWallets();
+    Task<ArkWallet> LoadWallet(string walletIdentifierOrFingerprint);
+    Task SaveWallet(string walletId, ArkWallet arkWallet, string? walletFingerprint = null);
 }

@@ -1,6 +1,6 @@
 namespace NArk.Abstractions.Wallets;
 
-public record WalletData(
+public record ArkWallet(
     string WalletIdentifier,
     string WalletFingerprint,
     byte[] WalletPrivateBytes,

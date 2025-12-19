@@ -13,7 +13,12 @@ public class OutputDescriptorHelper
         KeyPath? FullPath,
         ECPubKey? PubKey,
         ECXOnlyPubKey XOnlyPubKey
-    );
+    )
+    {
+        public string WalletId => 
+            AccountPath?.MasterFingerprint.ToString() ?? 
+                Convert.ToHexStringLower(XOnlyPubKey.ToBytes());
+    };
 
     public static OutputDescriptorMetadata Extract(OutputDescriptor descriptor)
     {

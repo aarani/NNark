@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Reflection;
 using NBitcoin;
 
@@ -9,18 +8,9 @@ public static class TaprootExtensions
     private static T? Property<T>(this object obj, string propertyName) where T: class =>
 		(T?)obj?.GetType()?.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(obj);
 
-	public static List<TaprootNodeInfo?> Branch(this TaprootBuilder builder) =>
+    private static List<TaprootNodeInfo?> Branch(this TaprootBuilder builder) =>
 		builder.Property<List<TaprootNodeInfo?>>("Branch")
 			?? throw new ArgumentException("TapRootBuilder Branch was not found");
-
-	public static List<uint256> MerkleBranch(this TaprootScriptLeaf leaf) =>
-		leaf.Property<List<uint256>>("MerkleBranch")
-			?? throw new ArgumentException("TapRootScriptLeaf MerkleBranch was not found");
-
-    public static ConcurrentDictionary<TapScript, List<List<uint256>>>
-        ScriptToMerkleProofMap(this TaprootSpendInfo info) =>
-            info.Property<ConcurrentDictionary<TapScript, List<List<uint256>>>>("ScriptToMerkleProofMap")
-                ?? throw new ArgumentException("TaprootSpendInfo ScriptToMerkleProofMap was not found");
 
     /// <summary>
 	/// Creates a TaprootBuilder using an algorithm similar to the AssembleTaprootScriptTree from the Bitcoin Core implementation.
@@ -71,7 +61,7 @@ public static class TaprootExtensions
 		{
 			// When we only have a single branch left, then that becomes
 			// our root.
-			if (branches.Count() == 1)
+			if (branches.Count == 1)
 			{
 				var builder = new TaprootBuilder();
 				builder.Branch().Add(branches.Single()!);

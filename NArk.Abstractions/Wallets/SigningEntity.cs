@@ -4,6 +4,7 @@ namespace NArk.Abstractions.Wallets;
 
 public interface ISigningEntity
 {
-    Dictionary<string, string> GetMetadata();
-    SignResult SignData(uint256 hash);
+    Task<Dictionary<string, string>> GetMetadata();
+    Task<string> GetFingerprint();
+    Task<SignResult> SignData(uint256 hash);
 }
