@@ -6,11 +6,10 @@ namespace NArk.Transactions;
 
 public record ArkPsbtSigner(ArkCoin Coin, ISigningEntity SigningEntity)
 {
-    public async Task SignAndFillPsbt(
-        PSBT psbt,
+    public async Task SignAndFillPsbt(PSBT psbt,
         TaprootReadyPrecomputedTransactionData precomputedTransactionData,
-        TaprootSigHash sigHash = TaprootSigHash.Default
-    )
+        CancellationToken cancellationToken = default,
+        TaprootSigHash sigHash = TaprootSigHash.Default)
     {
         var psbtInput = Coin.FillPsbtInput(psbt);
         

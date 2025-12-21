@@ -1,6 +1,7 @@
 using NArk.Abstractions;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.VTXOs;
+using NArk.Transport.Models;
 
 namespace NArk.Transport;
 
@@ -12,4 +13,6 @@ public interface IClientTransport
         CancellationToken cancellationToken = default);
     Task<string> RegisterIntent(ArkIntent intent, CancellationToken cancellationToken = default);
     Task DeleteIntent(ArkIntent intent, CancellationToken cancellationToken = default);
+    Task<SubmitTxResponse> SubmitTx(string signedArkTx, string[] checkpointTxs, CancellationToken cancellationToken = default);
+    Task FinalizeTx(string arkTxId, string[] finalCheckpointTxs, CancellationToken cancellationToken);
 }

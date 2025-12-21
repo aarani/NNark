@@ -46,16 +46,16 @@ public class ArkCoin: Coin
     {
     }
 
-    private string WalletIdentifier { get; }
-    private ArkContract Contract { get; }
-    private DateTimeOffset? ExpiresAt { get; }
-    private uint? ExpiresAtHeight { get; }
+    public string WalletIdentifier { get; }
+    public ArkContract Contract { get; }
+    public DateTimeOffset? ExpiresAt { get; }
+    public uint? ExpiresAtHeight { get; }
     public OutputDescriptor SignerDescriptor { get; }
-    private ScriptBuilder SpendingScriptBuilder { get; }
-    private WitScript? SpendingConditionWitness { get; }
-    private LockTime? LockTime { get; }
-    private Sequence? Sequence { get; }
-    private bool Recoverable { get; }
+    public ScriptBuilder SpendingScriptBuilder { get; }
+    public WitScript? SpendingConditionWitness { get; }
+    public LockTime? LockTime { get; }
+    public Sequence? Sequence { get; }
+    public bool Recoverable { get; }
     
     public TapScript SpendingScript => SpendingScriptBuilder.Build();
     
