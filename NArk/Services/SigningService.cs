@@ -28,6 +28,7 @@ public class SigningService(
         return new ArkPsbtSigner(coin, await wallet.FindSigningEntity(coin.SignerDescriptor));
     }
     
+    
     public async Task<ArkPsbtSigner> GetPsbtSigner(ArkVtxo vtxo)
     {
         var contract = await contractStorage.LoadContractByScript(vtxo.Script);

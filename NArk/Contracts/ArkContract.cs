@@ -1,4 +1,5 @@
-﻿using NArk.Abstractions.VTXOs;
+﻿using NArk.Abstractions.Contracts;
+using NArk.Abstractions.VTXOs;
 using NArk.Extensions;
 using NArk.Scripts;
 using NBitcoin;
@@ -81,6 +82,18 @@ public abstract class ArkContract(OutputDescriptor server)
         var dataString = string.Join("&", contractData.Select(kvp => $"{kvp.Key}={kvp.Value}"));
 
         return $"arkcontract={Type}&{dataString}";
+    }
+
+    public ArkContractEntity ToEntity(string walletIdentifier, DateTimeOffset? createdAt = null, bool isActive = true)
+    {
+        return new ArkContractEntity(
+            GetArkAddress().ScriptPubKey.ToHex(),
+            isActive,
+            Type,
+            GetContractData(),
+            walletIdentifier,
+            createdAt ?? DateTimeOffset.UtcNow
+        );
     }
 
     protected abstract IEnumerable<ScriptBuilder> GetScriptBuilders();

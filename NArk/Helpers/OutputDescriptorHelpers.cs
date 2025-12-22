@@ -4,7 +4,7 @@ using NBitcoin.Secp256k1;
 
 namespace NArk.Helpers;
 
-public class OutputDescriptorHelpers
+public static class OutputDescriptorHelpers
 {
     public record OutputDescriptorMetadata(
         BitcoinExtPubKey? AccountXpub,
