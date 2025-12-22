@@ -45,7 +45,7 @@ var chopsticks =
         .WithContainerNetworkAlias("chopsticks")
         .WithArgs("--use-faucet", "--use-mining", "--use-logger", "--rpc-addr", "bitcoin:18443", "--electrs-addr",
             "electrs:30000", "--addr", "0.0.0.0:3000")
-        .WithEndpoint(3000, 3000, protocol: ProtocolType.Tcp, name: "http")
+        .WithHttpEndpoint(3000, 3000, name: "http")
         .WaitFor(bitcoin)
         .WaitFor(electrs);
 
@@ -133,7 +133,7 @@ var ark =
         .WithEnvironment("ARKD_UNLOCKER_PASSWORD", "secret")
         .WithVolume("nark-ark", "/app/data")
         .OnResourceReady(StartArkResource)
-        .WithEndpoint(7070, 7070, protocol: ProtocolType.Tcp, name: "arkd");
+        .WithHttpEndpoint(7070, 7070, name: "arkd");
 
 async Task StartArkResource(ContainerResource cr, ResourceReadyEvent @event, CancellationToken cancellationToken)
 {
@@ -202,12 +202,20 @@ async Task StartArkResource(ContainerResource cr, ResourceReadyEvent @event, Can
             .ExecuteBufferedAsync(cancellationToken);
     
     var address = walletAddress.StandardOutput.Trim();
-    var chopsticksEndpoint = await chopsticks.GetEndpoint("http").GetValueAsync(cancellationToken);
+    var chopsticksEndpoint = await chopsticks.GetEndpoint("http", null).GetValueAsync(cancellationToken);
     await new HttpClient().PostAsJsonAsync($"{chopsticksEndpoint}/faucet", new
     {
         amount = 1,
         address = address
     }, cancellationToken: cancellationToken);
+
+    var noteOutput = await Cli.Wrap("docker")
+        .WithArguments(["exec", "-t", "ark", "arkd", "note", "--amount", "100000000"])
+        .ExecuteBufferedAsync(cancellationToken);
+    var note = noteOutput.StandardOutput.Trim();
+    await Cli.Wrap("docker")
+        .WithArguments(["exec", "-t", "ark", "ark", "redeem-notes", "-n", note, "--password", "secret"])
+        .ExecuteBufferedAsync(cancellationToken);
 }
 
 builder

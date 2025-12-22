@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using CliWrap;
 using CliWrap.Buffered;
 using NArk.Abstractions.Contracts;
@@ -13,10 +14,10 @@ using NSubstitute;
 
 namespace NArk.Tests.End2End;
 
-public class PaymentSupport
+public class PaymentsTests
 {
     [Test]
-    public async Task CanSendPaymentsToArkWallet()
+    public async Task CanReceiveVtxosFromImportedContract()
     {
         var builder = await DistributedApplicationTestingBuilder
             .CreateAsync<Projects.NArk_AppHost>(
@@ -30,9 +31,8 @@ public class PaymentSupport
         var a = await builder.BuildAsync();
         await a.StartAsync(CancellationToken.None);
         await a.ResourceNotifications.WaitForResourceHealthyAsync("ark", CancellationToken.None);
-        
         var network = Network.RegTest;
-        var clientTransport = new GrpcClientTransport("http://localhost:7070");
+        var clientTransport = new GrpcClientTransport(a.GetEndpoint("ark", "arkd").ToString());
         var info = await clientTransport.GetServerInfoAsync();
         var inMemoryWalletStorage = new InMemoryWalletStorage();
         var wallet = new SimpleSeedWallet(network, inMemoryWalletStorage);
@@ -49,6 +49,7 @@ public class PaymentSupport
         var address = contract.GetArkAddress().ToString(false);
         var vtxoStorage = NSubstitute.Substitute.For<IVtxoStorage>();
         vtxoStorage.GetUnspentVtxos().ReturnsForAnyArgs([]);
+        vtxoStorage.SaveVtxo(Arg.Any<ArkVtxo>()).ReturnsForAnyArgs(Task.CompletedTask);
         await using var vtxoSync = new VtxoSynchronizationService(
             inMemoryWalletStorage,
             vtxoStorage,
@@ -56,13 +57,23 @@ public class PaymentSupport
             clientTransport
         );
         await vtxoSync.Start();
+        var randomAmount = RandomNumberGenerator.GetInt32((int)info.Dust.Satoshi, 100000);
         await Cli.Wrap("docker")
             .WithArguments([
-                "exec", "-t", "ark", "ark", "send", "--to", address, "--amount", "100", "--password", "secret"
+                "exec", "-t", "ark", "ark", "send", "--to", address, "--amount", randomAmount.ToString(), "--password", "secret"
             ])
             .ExecuteBufferedAsync();
         await Task.Delay(TimeSpan.FromSeconds(10));
-        var vtxos = vtxoStorage.SaveVtxo(Arg.Any<ArkVtxo>()).ReceivedCalls();
-        Assert.That(vtxos.Any(v => ((ArkVtxo)v.GetArguments()[0]!).Script == arkContractEntity.Script));
+        
+        var vtxos = vtxoStorage.ReceivedCalls();
+        Assert.That(
+            vtxos
+                .Any(v =>
+                    v.GetMethodInfo().Name == nameof(IVtxoStorage.SaveVtxo) &&
+                    ((ArkVtxo)v.GetArguments()[0]!).Script == arkContractEntity.Script &&
+                    ((ArkVtxo)v.GetArguments()[0]!).Amount == (ulong)randomAmount
+                ),
+            Is.True
+        );
     }
 }
