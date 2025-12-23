@@ -20,8 +20,8 @@ public record ArkServerInfo(
 
 public record ArkOperatorFeeTerms(
     Money TxFeeRate,
-    Money OffchainOutput,
-    Money OnchainOutput,
-    Money OffchainInput,
-    Money OnchainInput
+    Money IntentOffchainOutput,
+    Money IntentOnchainOutput,
+    Money IntentOffchainInput,
+    Money IntentOnchainInput
 );

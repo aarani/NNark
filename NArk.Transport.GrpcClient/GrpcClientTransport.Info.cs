@@ -54,22 +54,22 @@ public partial class GrpcClientTransport
     {
         var fees = new ArkOperatorFeeTerms(
             TxFeeRate: Money.Zero,
-            OffchainOutput: Money.Zero,
-            OnchainOutput: Money.Zero,
-            OffchainInput: Money.Zero,
-            OnchainInput: Money.Zero
+            IntentOffchainOutput: Money.Zero,
+            IntentOnchainOutput: Money.Zero,
+            IntentOffchainInput: Money.Zero,
+            IntentOnchainInput: Money.Zero
         );
 
         if (decimal.TryParse(response?.TxFeeRate, out var txFeeRate))
             fees = fees with { TxFeeRate = Money.Satoshis(txFeeRate) };
         if (decimal.TryParse(response?.IntentFee.OffchainOutput, out var offchainOutputFee))
-            fees = fees with { OffchainOutput = Money.Satoshis(offchainOutputFee) };
+            fees = fees with { IntentOffchainOutput = Money.Satoshis(offchainOutputFee) };
         if (decimal.TryParse(response?.IntentFee.OffchainInput, out var offchainInput))
-            fees = fees with { OffchainInput = Money.Satoshis(offchainInput) };
+            fees = fees with { IntentOffchainInput = Money.Satoshis(offchainInput) };
         if (decimal.TryParse(response?.IntentFee.OnchainOutput, out var onchainOutputFee))
-            fees = fees with { OnchainOutput = Money.Satoshis(onchainOutputFee) };
+            fees = fees with { IntentOnchainOutput = Money.Satoshis(onchainOutputFee) };
         if (decimal.TryParse(response?.IntentFee.OnchainInput, out var onchainInput))
-            fees = fees with { OnchainInput = Money.Satoshis(onchainInput) };
+            fees = fees with { IntentOnchainInput = Money.Satoshis(onchainInput) };
 
         return fees;
     }

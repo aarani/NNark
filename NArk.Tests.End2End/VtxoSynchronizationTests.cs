@@ -72,6 +72,8 @@ public class VtxoSynchronizationTests
         );
         await vtxoSync.Start();
         
+        var contractService = new ContractService(wallet, contracts, clientTransport);
+
         // Generate a new payment contract, save to storage
         var signer = await wallet.GetNewSigningEntity("wallet1");
         var contract = new ArkPaymentContract(
@@ -79,15 +81,13 @@ public class VtxoSynchronizationTests
             info.UnilateralExit,
             await signer.GetOutputDescriptor()
         );
-        var arkContractEntity = contract.ToEntity("wallet1");
-        var address = contract.GetArkAddress().ToString(false);
-        await contracts.SaveContract("wallet1", arkContractEntity);
+        await contractService.ImportContract("wallet1", contract);
         
         // Pay a random amount to the contract address
         var randomAmount = RandomNumberGenerator.GetInt32((int)info.Dust.Satoshi, 100000);
         await Cli.Wrap("docker")
             .WithArguments([
-                "exec", "-t", "ark", "ark", "send", "--to", address, "--amount", randomAmount.ToString(), "--password", "secret"
+                "exec", "-t", "ark", "ark", "send", "--to", contract.GetArkAddress().ToString(false), "--amount", randomAmount.ToString(), "--password", "secret"
             ])
             .ExecuteBufferedAsync();
        
@@ -100,7 +100,7 @@ public class VtxoSynchronizationTests
             vtxos
                 .Any(v =>
                     v.GetMethodInfo().Name == nameof(IVtxoStorage.SaveVtxo) &&
-                    ((ArkVtxo)v.GetArguments()[0]!).Script == arkContractEntity.Script &&
+                    ((ArkVtxo)v.GetArguments()[0]!).Script == contract.GetArkAddress().ScriptPubKey.ToHex() &&
                     ((ArkVtxo)v.GetArguments()[0]!).Amount == (ulong)randomAmount
                 ),
             Is.True
@@ -126,8 +126,8 @@ public class VtxoSynchronizationTests
         await wallet.CreateNewWallet("wallet1");
         await wallet.CreateNewWallet("wallet2");
 
-        var paymentService = new ContractService(wallet, contracts, clientTransport);
-        
+        var contractService = new ContractService(wallet, contracts, clientTransport);
+
         // Start vtxo synchronization service
         var vtxoSync = new VtxoSynchronizationService(
             inMemoryWalletStorage,
@@ -137,7 +137,7 @@ public class VtxoSynchronizationTests
         );
         await vtxoSync.Start();
         
-        var contract = await paymentService.DerivePaymentContract("wallet1");
+        var contract = await contractService.DerivePaymentContract("wallet1");
         var wallet1Address = contract.GetArkAddress();
         
         // Pay a random amount to the contract address
@@ -165,12 +165,12 @@ public class VtxoSynchronizationTests
         );
         
         // Generate a new payment contract to receive funds from first wallet, save to storage
-        var contract2 = await paymentService.DerivePaymentContract("wallet2");
+        var contract2 = await contractService.DerivePaymentContract("wallet2");
         var wallet2Address = contract2.GetArkAddress();
         
         vtxoStorage.ClearReceivedCalls();
         var spendingService = new SpendingService(vtxoStorage, contracts, 
-            new SigningService(wallet, contracts, network), paymentService, clientTransport);
+            new SigningService(wallet, contracts, network), contractService, clientTransport);
         
         await spendingService.Spend("wallet1",
         [
