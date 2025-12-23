@@ -77,5 +77,6 @@ public class ArkCoin: Coin
         return psbtInput;
     }
 
-    public static implicit operator ArkCoinLite(ArkCoin coin) => new(coin.WalletIdentifier, coin.Outpoint, coin.TxOut);
+    public ArkCoinLite ToLite() =>
+        new(WalletIdentifier, Outpoint, TxOut, Recoverable, ExpiresAtHeight, ExpiresAt);
 }

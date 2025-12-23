@@ -14,6 +14,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NArk.AppHost", "NArk.AppHos
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NArk.Tests.End2End", "NArk.Tests.End2End\NArk.Tests.End2End.csproj", "{0FB67775-2B35-4289-9560-5366C77793FB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NArk.Blockchain.NBXplorer", "NArk.Blockchain.NBXplorer\NArk.Blockchain.NBXplorer.csproj", "{F13959B8-2846-4CE2-9EF8-F8E0720AE509}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -48,5 +50,9 @@ Global
 		{0FB67775-2B35-4289-9560-5366C77793FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0FB67775-2B35-4289-9560-5366C77793FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0FB67775-2B35-4289-9560-5366C77793FB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F13959B8-2846-4CE2-9EF8-F8E0720AE509}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F13959B8-2846-4CE2-9EF8-F8E0720AE509}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F13959B8-2846-4CE2-9EF8-F8E0720AE509}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F13959B8-2846-4CE2-9EF8-F8E0720AE509}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

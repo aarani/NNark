@@ -19,4 +19,24 @@ public record ArkIntent(
     string? CommitmentTransactionId,
     string? CancellationReason,
     OutPoint[] IntentVtxos
-);
+)
+{
+    private sealed class InternalIdEqualityComparer : IEqualityComparer<ArkIntent>
+    {
+        public bool Equals(ArkIntent? x, ArkIntent? y)
+        {
+            if (ReferenceEquals(x, y)) return true;
+            if (x is null) return false;
+            if (y is null) return false;
+            if (x.GetType() != y.GetType()) return false;
+            return x.InternalId.Equals(y.InternalId);
+        }
+
+        public int GetHashCode(ArkIntent obj)
+        {
+            return obj.InternalId.GetHashCode();
+        }
+    }
+
+    public static IEqualityComparer<ArkIntent> InternalIdComparer { get; } = new InternalIdEqualityComparer();
+}

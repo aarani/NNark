@@ -126,7 +126,7 @@ public class VtxoSynchronizationService : IAsyncDisposable
         {
             await UpdateScriptsView(_shutdownCts.Token);
         }
-        catch (Exception e)
+        catch
         {
             // ignored
         }

@@ -15,6 +15,7 @@ using NBitcoin.Secp256k1;
 namespace NArk.Services;
 
 public class IntentGenerationService(
+    IWalletStorage walletStorage,
     ISigningService signingService,
     IIntentStorage intentStorage,
     IContractStorage contractStorage,
@@ -36,64 +37,73 @@ public class IntentGenerationService(
 
     private async Task DoGenerationLoop(CancellationToken token)
     {
-        while (!token.IsCancellationRequested)
+        try
         {
-            var activeContractsByWallets =
-                (await contractStorage.LoadActiveContracts([]))
-                .GroupBy(c => c.WalletIdentifier);
-
-            foreach (var activeContractsByWallet in activeContractsByWallets)
+            while (!token.IsCancellationRequested)
             {
-               var activeContractsByScript =
-                   activeContractsByWallet.GroupBy(c => c.Script)
-                    .ToDictionary(g => g.Key, g => g.First());
-             
-               var unspentVtxos =
-                   await vtxoStorage.GetVtxosByScripts(
-                       [..activeContractsByScript.Keys]
-                   );
-
-               Dictionary<ICoin, ArkPsbtSigner> signers = [];
-            
-               foreach (var vtxo in unspentVtxos)
-               {
-                   var signer = await signingService.GetVtxoPsbtSignerByContract(activeContractsByScript[vtxo.Script], vtxo);
-                   signers.Add(signer.Coin, signer);
-               }
-            
-               var intentSpecs =
-                   await intentScheduler.GetIntentsToSubmit([..signers.Keys.Cast<ArkCoinLite>()]);
-            
-               foreach (var intentSpec in intentSpecs)
-               {
-                   var overlappingIntents = await intentStorage.GetIntentsByInputs([..intentSpec.Coins.Select(c => c.Outpoint)], true);
-                   if (overlappingIntents.Count != 0)
-                       throw new AlreadyLockedVtxoException();
+                var wallets = (await walletStorage.LoadAllWallets()).Select(w => w.WalletIdentifier).ToArray();
                 
-                   var intentTxs = await CreateIntents(
-                       network,
-                       [await signers[intentSpec.Coins[0]].SigningEntity.GetPublicKey()],
-                       intentSpec.ValidFrom,
-                       intentSpec.ValidUntil,
-                       [..signers.Values],
-                       intentSpec.Outputs,
-                       token
-                   );
+                var activeContractsByWallets =
+                    (await contractStorage.LoadActiveContracts(wallets))
+                    .GroupBy(c => c.WalletIdentifier);
 
-                   await intentStorage.SaveIntent(activeContractsByWallet.Key,
-                       new ArkIntent(Guid.NewGuid(), null, activeContractsByWallet.Key, ArkIntentState.WaitingForBatch,
-                           intentSpec.ValidFrom, intentSpec.ValidUntil, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow,
-                           intentTxs.RegisterTx.ToHex(), intentTxs.RegisterMessage, intentTxs.Delete.ToHex(),
-                           intentTxs.DeleteMessage, null, null, null,
-                           intentSpec.Coins.Select(c => c.Outpoint).ToArray()));
-               }
+                foreach (var activeContractsByWallet in activeContractsByWallets)
+                {
+                    var activeContractsByScript =
+                        activeContractsByWallet.GroupBy(c => c.Script)
+                            .ToDictionary(g => g.Key, g => g.First());
+             
+                    var unspentVtxos =
+                        await vtxoStorage.GetVtxosByScripts(
+                            [..activeContractsByScript.Keys]
+                        );
+
+                    Dictionary<ArkCoinLite, ArkPsbtSigner> signers = [];
+            
+                    foreach (var vtxo in unspentVtxos)
+                    {
+                        var signer = await signingService.GetVtxoPsbtSignerByContract(activeContractsByScript[vtxo.Script], vtxo);
+                        signers.Add(signer.Coin.ToLite(), signer);
+                    }
+            
+                    var intentSpecs =
+                        await intentScheduler.GetIntentsToSubmit([..signers.Keys]);
+            
+                    foreach (var intentSpec in intentSpecs)
+                    {
+                        var overlappingIntents = await intentStorage.GetIntentsByInputs(activeContractsByWallet.Key, [..intentSpec.Coins.Select(c => c.Outpoint)], true);
+                        if (overlappingIntents.Count != 0)
+                            continue;
+                
+                        var intentTxs = await CreateIntents(
+                            network,
+                            [await signers[intentSpec.Coins[0]].SigningEntity.GetPublicKey()],
+                            intentSpec.ValidFrom,
+                            intentSpec.ValidUntil,
+                            [..signers.Where(s => intentSpec.Coins.Contains(s.Key)).Select(s => s.Value)],
+                            intentSpec.Outputs,
+                            token
+                        );
+
+                        await intentStorage.SaveIntent(activeContractsByWallet.Key,
+                            new ArkIntent(Guid.NewGuid(), null, activeContractsByWallet.Key, ArkIntentState.WaitingToSubmit,
+                                intentSpec.ValidFrom, intentSpec.ValidUntil, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow,
+                                intentTxs.RegisterTx.ToBase64(), intentTxs.RegisterMessage, intentTxs.Delete.ToBase64(),
+                                intentTxs.DeleteMessage, null, null, null,
+                                intentSpec.Coins.Select(c => c.Outpoint).ToArray()));
+                    }
+                }
+
+                await Task.Delay(pollInterval, token);
             }
-
-            await Task.Delay(pollInterval, token);
+        }
+        catch (OperationCanceledException)
+        {
+            // ignored
         }
     }
     
-    public async Task<PSBT> CreateIntent(string message, Network network, IReadOnlyCollection<ArkPsbtSigner> inputs,
+    public async Task<PSBT> CreateIntent(string message, Network network, ArkPsbtSigner[] inputs,
         IReadOnlyCollection<TxOut>? outputs, CancellationToken cancellationToken = default)
     {
         var firstInput = inputs.First();
@@ -115,9 +125,9 @@ public class IntentGenerationService(
             toSignGTx.Outputs.AddRange(outputs);
         }
         
-        inputs = [ new ArkPsbtSigner(new ArkCoin(firstInput.Coin), firstInput.SigningEntity), ..inputs];
-        firstInput.Coin.TxOut = toSignTx.Inputs[0].GetTxOut();
-        firstInput.Coin.Outpoint = toSignTx.Inputs[0].PrevOut;
+        inputs = [ firstInput with { Coin = new ArkCoin(firstInput.Coin) }, ..inputs];
+        inputs[0].Coin.TxOut = toSignTx.Inputs[0].GetTxOut();
+        inputs[0].Coin.Outpoint = toSignTx.Inputs[0].PrevOut;
         
         var precomputedTransactionData = toSignGTx.PrecomputeTransactionData(inputs.Select(i => i.Coin.TxOut).ToArray());
         
@@ -125,7 +135,7 @@ public class IntentGenerationService(
         
         foreach (var signer in inputs)
         {
-            await signer.SignAndFillPsbt(toSignTx, precomputedTransactionData);
+            await signer.SignAndFillPsbt(toSignTx, precomputedTransactionData, cancellationToken);
         }
         
         return toSignTx;
@@ -202,8 +212,8 @@ public class IntentGenerationService(
         var deleteMessage = JsonSerializer.Serialize(deleteMsg);
 
         return (
-            await CreateIntent(message, network, inputSigners, outs?.Cast<TxOut>().ToArray(), cancellationToken),
-            await CreateIntent(deleteMessage, network, inputSigners, null, cancellationToken),
+            await CreateIntent(message, network, inputSigners.ToArray(), outs?.Cast<TxOut>().ToArray(), cancellationToken),
+            await CreateIntent(deleteMessage, network, inputSigners.ToArray(), null, cancellationToken),
             message,
             deleteMessage);
     }
