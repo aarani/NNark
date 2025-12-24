@@ -5,7 +5,6 @@ using NArk.Abstractions.Wallets;
 using NArk.Helpers;
 using NArk.Models;
 using NArk.Scripts;
-using NArk.Services.Batches;
 using NArk.Transactions;
 using NArk.Transport;
 using NBitcoin;

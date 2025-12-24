@@ -3,7 +3,6 @@ using NArk.Extensions;
 using NArk.Scripts;
 using NBitcoin;
 using NBitcoin.Scripting;
-using NBitcoin.Secp256k1;
 
 namespace NArk.Contracts;
 
@@ -58,7 +57,7 @@ public class ArkPaymentContract(OutputDescriptor server, Sequence exitDelay, Out
             CollaborativePath(), null, null, null, vtxo.Recoverable);
     }
 
-    public static ArkContract? Parse(Dictionary<string, string> contractData, Network network)
+    public static ArkContract Parse(Dictionary<string, string> contractData, Network network)
     {
         var server = KeyExtensions.ParseOutputDescriptor(contractData["server"], network);
         var exitDelay = new Sequence(uint.Parse(contractData["exit_delay"]));

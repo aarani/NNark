@@ -1,4 +1,5 @@
-﻿using NBitcoin;
+﻿using NArk.Enums;
+using NBitcoin;
 
 namespace NArk.Scripts;
 
@@ -8,16 +9,16 @@ public class HashLockTapScript(byte[] hash, HashLockTypeOption hashLockType) : S
     public HashLockTypeOption HashLockType { get; } = hashLockType;
 
     public HashLockTapScript(uint160 hash) :
-        this(hash.ToBytes(false), HashLockTypeOption.HASH160)
+        this(hash.ToBytes(false), HashLockTypeOption.Hash160)
     { }
 
     public HashLockTapScript(uint256 hash) :
-        this(hash.ToBytes(false), HashLockTypeOption.SHA256)
+        this(hash.ToBytes(false), HashLockTypeOption.Sha256)
     { }
 
     public override IEnumerable<Op> BuildScript()
     {
-        if (HashLockType == HashLockTypeOption.HASH160)
+        if (HashLockType == HashLockTypeOption.Hash160)
             yield return OpcodeType.OP_HASH160;
         else
             yield return OpcodeType.OP_SHA256;

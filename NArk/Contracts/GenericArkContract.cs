@@ -1,7 +1,6 @@
 ﻿using NArk.Abstractions.VTXOs;
 using NArk.Scripts;
 using NBitcoin.Scripting;
-using NBitcoin.Secp256k1;
 
 namespace NArk.Contracts;
 

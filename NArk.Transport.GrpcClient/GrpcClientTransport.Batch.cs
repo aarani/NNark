@@ -4,7 +4,7 @@ using NArk.Abstractions.Batches;
 
 namespace NArk.Transport.GrpcClient;
 
-public partial class GrpcClientTransport : IClientTransport
+public partial class GrpcClientTransport
 {
 
     public async Task SubmitTreeNoncesAsync(SubmitTreeNoncesRequest treeNonces, CancellationToken cancellationToken)
@@ -54,7 +54,7 @@ public partial class GrpcClientTransport : IClientTransport
 
     public async IAsyncEnumerable<BatchEvent> GetEventStreamAsync(GetEventStreamRequest req, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var response = _serviceClient.GetEventStream(new Ark.V1.GetEventStreamRequest() { Topics = { req.Topics } });
+        var response = _serviceClient.GetEventStream(new Ark.V1.GetEventStreamRequest() { Topics = { req.Topics } }, cancellationToken: cancellationToken);
         await foreach (var e in response.ResponseStream.ReadAllAsync(cancellationToken))
         {
             switch (e.EventCase)

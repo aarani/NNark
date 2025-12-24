@@ -1,6 +1,4 @@
 ﻿using System.Collections;
-using NBitcoin;
-using NBitcoin.DataEncoders;
 using NBitcoin.Secp256k1;
 
 namespace NArk.Tests;

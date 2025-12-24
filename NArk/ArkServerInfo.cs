@@ -3,7 +3,7 @@ using NBitcoin;
 using NBitcoin.Scripting;
 using NBitcoin.Secp256k1;
 
-namespace NArk.Abstractions;
+namespace NArk;
 
 public record ArkServerInfo(
     Money Dust,

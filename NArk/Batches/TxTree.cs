@@ -1,7 +1,6 @@
-using NArk.Batches;
 using NBitcoin;
 
-namespace NArk.Services.Batches;
+namespace NArk.Batches;
 
 /// <summary>
 /// Represents a graph of bitcoin transactions used in settlement sessions

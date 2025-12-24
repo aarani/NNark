@@ -75,7 +75,7 @@ public class BatchManagementService(
                     _isReservedConnections.Where(kvp => !kvp.Value).ToArray();
 
                 if (unreservedConnections.Length > 1)
-                    foreach (var (connId, conn) in unreservedConnections.Skip(1))
+                    foreach (var (connId, _) in unreservedConnections.Skip(1))
                     {
                         if (!_connections.TryGetValue(connId, out var connection)) continue;
 
@@ -131,7 +131,7 @@ public class BatchManagementService(
 
     private async Task LoadActiveIntentsAsync(CancellationToken cancellationToken)
     {
-        foreach (var intent in await intentStorage.GetActiveIntents())
+        foreach (var intent in await intentStorage.GetActiveIntents(cancellationToken))
         {
             if (intent.IntentId is not null)
                 _activeIntents[intent.IntentId] = intent;

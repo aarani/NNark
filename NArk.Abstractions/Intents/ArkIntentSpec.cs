@@ -1,5 +1,3 @@
-using NArk.Abstractions.VTXOs;
-
 namespace NArk.Abstractions.Intents;
 
 public record ArkIntentSpec(

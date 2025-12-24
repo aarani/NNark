@@ -39,7 +39,7 @@ public static class OutputDescriptorHelpers
 
                 var path = KeyPath.Parse(xx.KeyOriginInfo.KeyPath + "/" + hd.Path);
                 var pubKey = ECPubKey.Create(
-                    hd.GetPubKey(0, id => null, out var info).ToBytes());
+                    hd.GetPubKey(0, _ => null, out _).ToBytes());
                 return new OutputDescriptorMetadata(hd.Extkey, xx.KeyOriginInfo, hd.Path, path, pubKey,
                     pubKey.ToXOnlyPubKey());
             default:

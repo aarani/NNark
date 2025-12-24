@@ -1,6 +1,6 @@
-namespace NArk.Abstractions.Time;
+namespace NArk.Abstractions.Blockchain;
 
 public interface IChainTimeProvider
 {
-    Task<TimeHeight> GetChainTime();
+    Task<TimeHeight> GetChainTime(CancellationToken cancellationToken = default);
 }

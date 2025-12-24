@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using Aspire.Hosting;
 using CliWrap;
 using CliWrap.Buffered;
-using Microsoft.Extensions.Logging;
 using NArk.Abstractions.Intents;
 using NArk.Blockchain.NBXplorer;
 using NArk.Contracts;

@@ -10,27 +10,33 @@ namespace NArk.Wallets;
 
 public class SimpleSeedWallet(Network network, IWalletStorage walletStorage) : IWallet
 {
-    public async Task CreateNewWallet(string walletIdentifier)
+    public async Task CreateNewWallet(string walletIdentifier, CancellationToken cancellationToken = default)
     {
         var mnemonic = new Mnemonic(Wordlist.English, WordCount.Twelve);
         var fingerprint = mnemonic.DeriveExtKey().GetPublicKey().GetHDFingerPrint();
-        await walletStorage.SaveWallet(walletIdentifier, new ArkWallet(walletIdentifier, fingerprint.ToString(), Encoding.UTF8.GetBytes(mnemonic.ToString())), fingerprint.ToString());
+        await walletStorage.SaveWallet(walletIdentifier,
+            new ArkWallet(walletIdentifier, fingerprint.ToString(), Encoding.UTF8.GetBytes(mnemonic.ToString())),
+            fingerprint.ToString(), cancellationToken);
     }
 
-    public async Task<ISigningEntity> GetNewSigningEntity(string walletIdentifier)
+    public async Task<ISigningEntity> GetNewSigningEntity(string walletIdentifier,
+        CancellationToken cancellationToken = default)
     {
-        var walletData = await walletStorage.LoadWallet(walletIdentifier);
+        var walletData = await walletStorage.LoadWallet(walletIdentifier, cancellationToken);
         var mnemonic = new Mnemonic(Encoding.UTF8.GetString(walletData.WalletPrivateBytes));
         var extKey = mnemonic.DeriveExtKey();
         var signer = new HdSigningEntity(extKey, network, walletData.LastAddressIndex);
-        await walletStorage.SaveWallet(walletIdentifier, walletData with { LastAddressIndex = walletData.LastAddressIndex + 1 });
+        await walletStorage.SaveWallet(walletIdentifier,
+            walletData with { LastAddressIndex = walletData.LastAddressIndex + 1 },
+            cancellationToken: cancellationToken);
         return signer;
     }
 
-    public async Task<ISigningEntity> FindSigningEntity(OutputDescriptor outputDescriptor)
+    public async Task<ISigningEntity> FindSigningEntity(OutputDescriptor outputDescriptor,
+        CancellationToken cancellationToken = default)
     {
         var walletId = OutputDescriptorHelpers.Extract(outputDescriptor).WalletId;
-        var walletData = await walletStorage.LoadWallet(walletId);
+        var walletData = await walletStorage.LoadWallet(walletId, cancellationToken);
         var mnemonic = new Mnemonic(Encoding.UTF8.GetString(walletData.WalletPrivateBytes));
         var extKey = mnemonic.DeriveExtKey();
         var signer = new HdSigningEntity(extKey, outputDescriptor);
@@ -42,10 +48,9 @@ public class SimpleSeedWallet(Network network, IWalletStorage walletStorage) : I
         internal HdSigningEntity(ExtKey extKey, Network network, int index) :
             this(extKey, GetDescriptorFromIndex(extKey, network, index))
         {
-
         }
 
-        public async Task<Dictionary<string, string>> GetMetadata()
+        public async Task<Dictionary<string, string>> GetMetadata(CancellationToken cancellationToken = default)
         {
             return
                 new Dictionary<string, string>
@@ -55,17 +60,18 @@ public class SimpleSeedWallet(Network network, IWalletStorage walletStorage) : I
                 };
         }
 
-        public Task<string> GetFingerprint()
+        public Task<string> GetFingerprint(CancellationToken cancellationToken = default)
         {
             return Task.FromResult(extKey.GetPublicKey().GetHDFingerPrint().ToString());
         }
 
-        public Task<OutputDescriptor> GetOutputDescriptor() => Task.FromResult(descriptor);
+        public Task<OutputDescriptor> GetOutputDescriptor(CancellationToken cancellationToken = default) =>
+            Task.FromResult(descriptor);
 
-        public async Task<ECPubKey> GetPublicKey()
+        public Task<ECPubKey> GetPublicKey(CancellationToken cancellationToken = default)
         {
             var info = OutputDescriptorHelpers.Extract(descriptor);
-            return info.PubKey!;
+            return Task.FromResult(info.PubKey!);
         }
 
         private static OutputDescriptor GetDescriptorFromIndex(ExtKey extKey, Network network, int index)
@@ -84,18 +90,17 @@ public class SimpleSeedWallet(Network network, IWalletStorage walletStorage) : I
             return OutputDescriptor.Parse(descriptor.Replace("/*", $"/{index}"), network);
         }
 
-        public async Task<SignResult> SignData(uint256 data)
+        public async Task<SignResult> SignData(uint256 data, CancellationToken cancellationToken = default)
         {
-            var key = await DerivePrivateKey();
+            var key = await DerivePrivateKey(cancellationToken);
             var sig = key.SignBIP340(data.ToBytes());
             return new SignResult(sig, key.CreateXOnlyPubKey());
         }
 
-        public async Task<ECPrivKey> DerivePrivateKey()
+        public Task<ECPrivKey> DerivePrivateKey(CancellationToken cancellationToken = default)
         {
             var info = OutputDescriptorHelpers.Extract(descriptor);
-
-            return ECPrivKey.Create(extKey.Derive(info.FullPath!).PrivateKey.ToBytes());
+            return Task.FromResult(ECPrivKey.Create(extKey.Derive(info.FullPath!).PrivateKey.ToBytes()));
         }
 
         public async Task<MusigPartialSignature> SignMusig(MusigContext context,
@@ -103,7 +108,7 @@ public class SimpleSeedWallet(Network network, IWalletStorage walletStorage) : I
             CancellationToken cancellationToken = default)
         {
             // Create MUSIG2 partial signature using the private key and nonce
-            return context.Sign(await DerivePrivateKey(), nonce);
+            return context.Sign(await DerivePrivateKey(cancellationToken), nonce);
         }
     }
 }

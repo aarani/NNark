@@ -11,7 +11,7 @@ public class VtxoSynchronizationService : IAsyncDisposable
     private readonly CancellationTokenSource _shutdownCts = new();
     private Task? _queryTask;
 
-    private CancellationTokenSource? _restartCts = null;
+    private CancellationTokenSource? _restartCts;
     private Task? _streamTask;
 
     private HashSet<string> _lastViewOfScripts = [];

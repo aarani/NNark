@@ -1,10 +1,11 @@
-﻿using NArk.Scripts;
+﻿using NArk.Enums;
+using NArk.Scripts;
 using NBitcoin;
 using NBitcoin.DataEncoders;
 
 namespace NArk.Contracts;
 
-public class ArkNoteContract(byte[] preimage) : HashLockedArkPaymentContract(null!, new Sequence(), null, preimage, HashLockTypeOption.SHA256)
+public class ArkNoteContract(byte[] preimage) : HashLockedArkPaymentContract(null!, new Sequence(), null, preimage, HashLockTypeOption.Sha256)
 {
     public OutPoint Outpoint => new(new uint256(Hash), 0);
 
@@ -13,7 +14,7 @@ public class ArkNoteContract(byte[] preimage) : HashLockedArkPaymentContract(nul
 
     protected override IEnumerable<ScriptBuilder> GetScriptBuilders()
     {
-        yield return new HashLockTapScript(Hash, HashLockTypeOption.SHA256);
+        yield return new HashLockTapScript(Hash, HashLockTypeOption.Sha256);
     }
 
     public override TapScript[] GetTapScriptList()

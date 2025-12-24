@@ -1,4 +1,4 @@
-using NArk.Abstractions.Time;
+using NArk.Abstractions.Blockchain;
 using NBitcoin;
 using NBXplorer;
 
@@ -13,11 +13,11 @@ public class ChainTimeProvider : IChainTimeProvider
         _client = new ExplorerClient(new NBXplorerNetworkProvider(network.ChainName).GetBTC(), uri);
     }
 
-    public async Task<TimeHeight> GetChainTime()
+    public async Task<TimeHeight> GetChainTime(CancellationToken cancellationToken = default)
     {
         return new TimeHeight(
             DateTimeOffset.UtcNow,
-            (uint)(await _client.GetStatusAsync()).ChainHeight
+            (uint)(await _client.GetStatusAsync(cancellationToken)).ChainHeight
         );
     }
 }

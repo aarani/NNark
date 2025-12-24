@@ -1,9 +1,7 @@
 ﻿using NArk.Abstractions.Wallets;
 using NArk.Extensions;
 using NArk.Helpers;
-using NArk.Services.Batches;
 using NBitcoin;
-using NBitcoin.Scripting;
 using NBitcoin.Secp256k1;
 using NBitcoin.Secp256k1.Musig;
 

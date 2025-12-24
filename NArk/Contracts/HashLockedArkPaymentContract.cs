@@ -1,10 +1,10 @@
 using NArk.Abstractions.VTXOs;
+using NArk.Enums;
 using NArk.Extensions;
 using NArk.Scripts;
 using NBitcoin;
 using NBitcoin.Crypto;
 using NBitcoin.Scripting;
-using NBitcoin.Secp256k1;
 
 namespace NArk.Contracts;
 
@@ -29,8 +29,8 @@ public class HashLockedArkPaymentContract(
         {
             return hashLockType switch
             {
-                HashLockTypeOption.HASH160 => Hashes.Hash160(preimage).ToBytes(),
-                HashLockTypeOption.SHA256 => Hashes.SHA256(preimage),
+                HashLockTypeOption.Hash160 => Hashes.Hash160(preimage).ToBytes(),
+                HashLockTypeOption.Sha256 => Hashes.SHA256(preimage),
                 _ => throw new ArgumentOutOfRangeException()
             };
         }
@@ -89,7 +89,7 @@ public class HashLockedArkPaymentContract(
         return new UnilateralPathArkTapScript(_exitDelay, ownerScript);
     }
 
-    public static ArkContract? Parse(Dictionary<string, string> contractData, Network network)
+    public static ArkContract Parse(Dictionary<string, string> contractData, Network network)
     {
         var server = KeyExtensions.ParseOutputDescriptor(contractData["server"], network);
         var exitDelay = new Sequence(uint.Parse(contractData["exit_delay"]));

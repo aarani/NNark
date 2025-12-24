@@ -3,8 +3,6 @@ using Aspire.Hosting;
 using CliWrap;
 using CliWrap.Buffered;
 using NArk.Abstractions.Intents;
-using NArk.Abstractions.Time;
-using NArk.Abstractions.VTXOs;
 using NArk.Blockchain.NBXplorer;
 using NArk.Contracts;
 using NArk.Services;

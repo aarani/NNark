@@ -36,7 +36,7 @@ public static class KeyExtensions
         }
         else
         {
-            bytes = trOutputDescriptor.InnerPubkey.GetPubKey(0, id => null).ToBytes();
+            bytes = trOutputDescriptor.InnerPubkey.GetPubKey(0, _ => null).ToBytes();
         }
 
         return ECPubKey.Create(bytes);

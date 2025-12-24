@@ -1,5 +1,4 @@
 using NArk.Helpers;
-using NArk.Services.Batches;
 using NBitcoin;
 using NBitcoin.Secp256k1;
 

@@ -7,7 +7,7 @@ public partial class GrpcClientTransport
 {
     public async Task<SubmitTxResponse> SubmitTx(string signedArkTx, string[] checkpointTxs, CancellationToken cancellationToken = default)
     {
-        var submitRequest = new Ark.V1.SubmitTxRequest
+        var submitRequest = new SubmitTxRequest
         {
             SignedArkTx = signedArkTx,
             CheckpointTxs = { checkpointTxs }

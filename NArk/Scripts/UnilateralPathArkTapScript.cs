@@ -1,6 +1,5 @@
 using NArk.Helpers;
 using NBitcoin;
-using NBitcoin.Secp256k1;
 
 namespace NArk.Scripts;
 

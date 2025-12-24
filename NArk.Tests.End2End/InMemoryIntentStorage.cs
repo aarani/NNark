@@ -33,7 +33,7 @@ public class InMemoryIntentStorage : IIntentStorage
         return Task.CompletedTask;
     }
 
-    public Task<IReadOnlyCollection<ArkIntent>> GetIntents(string walletId)
+    public Task<IReadOnlyCollection<ArkIntent>> GetIntents(string walletId, CancellationToken cancellationToken = default)
     {
         lock (_intents)
         {
@@ -41,7 +41,7 @@ public class InMemoryIntentStorage : IIntentStorage
         }
     }
 
-    public Task<ArkIntent?> GetIntentByInternalId(Guid internalId)
+    public Task<ArkIntent?> GetIntentByInternalId(Guid internalId, CancellationToken cancellationToken = default)
     {
         lock (_intents)
         {
@@ -54,7 +54,7 @@ public class InMemoryIntentStorage : IIntentStorage
         }
     }
 
-    public Task<ArkIntent?> GetIntentByIntentId(string walletId, string intentId)
+    public Task<ArkIntent?> GetIntentByIntentId(string walletId, string intentId, CancellationToken cancellationToken = default)
     {
         lock (_intents)
         {
@@ -63,7 +63,7 @@ public class InMemoryIntentStorage : IIntentStorage
     }
 
     public Task<IReadOnlyCollection<ArkIntent>> GetIntentsByInputs(string walletId, OutPoint[] inputs,
-        bool pendingOnly = true)
+        bool pendingOnly = true, CancellationToken cancellationToken = default)
     {
         lock (_intents)
         {
@@ -73,7 +73,7 @@ public class InMemoryIntentStorage : IIntentStorage
         }
     }
 
-    public Task<IReadOnlyCollection<ArkIntent>> GetUnsubmittedIntents()
+    public Task<IReadOnlyCollection<ArkIntent>> GetUnsubmittedIntents(CancellationToken cancellationToken = default)
     {
         lock (_intents)
         {
@@ -82,7 +82,7 @@ public class InMemoryIntentStorage : IIntentStorage
         }
     }
 
-    public Task<IReadOnlyCollection<ArkIntent>> GetActiveIntents()
+    public Task<IReadOnlyCollection<ArkIntent>> GetActiveIntents(CancellationToken cancellationToken = default)
     {
         lock (_intents)
         {

@@ -1,13 +1,13 @@
 using NArk.Abstractions;
+using NArk.Abstractions.Blockchain;
 using NArk.Abstractions.Intents;
-using NArk.Abstractions.Time;
 
 namespace NArk.Services;
 
 public class SimpleIntentScheduler(IContractService contractService, IChainTimeProvider chainTimeProvider, TimeSpan? threshold, uint? thresholdHeight) : IIntentScheduler
 {
     public async Task<IReadOnlyCollection<ArkIntentSpec>> GetIntentsToSubmit(
-        IReadOnlyCollection<ArkCoinLite> unspentVtxos)
+        IReadOnlyCollection<ArkCoinLite> unspentVtxos, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(chainTimeProvider);
         ArgumentNullException.ThrowIfNull(threshold);
@@ -15,7 +15,7 @@ public class SimpleIntentScheduler(IContractService contractService, IChainTimeP
 
         if (unspentVtxos.Count == 0) return [];
 
-        var chainTime = await chainTimeProvider.GetChainTime();
+        var chainTime = await chainTimeProvider.GetChainTime(cancellationToken);
 
         var coins = unspentVtxos
             .Where(v => v.Recoverable || (v.ExpiryAt is { } exp && exp + threshold.Value > chainTime.Timestamp) ||

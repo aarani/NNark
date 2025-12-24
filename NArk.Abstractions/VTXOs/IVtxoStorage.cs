@@ -4,9 +4,10 @@ namespace NArk.Abstractions.VTXOs;
 
 public interface IVtxoStorage
 {
-    Task SaveVtxo(ArkVtxo vtxo);
-    Task<ArkVtxo?> GetVtxoByOutPoint(OutPoint outpoint);
-    Task<IReadOnlyCollection<ArkVtxo>> GetVtxosByScripts(IReadOnlyCollection<string> scripts, bool allowSpent = false);
-    Task<IReadOnlyCollection<ArkVtxo>> GetUnspentVtxos();
-    Task<IReadOnlyCollection<ArkVtxo>> GetAllVtxos();
+    Task SaveVtxo(ArkVtxo vtxo, CancellationToken cancellationToken = default);
+    Task<ArkVtxo?> GetVtxoByOutPoint(OutPoint outpoint, CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<ArkVtxo>> GetVtxosByScripts(IReadOnlyCollection<string> scripts, bool allowSpent = false
+        , CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<ArkVtxo>> GetUnspentVtxos(CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<ArkVtxo>> GetAllVtxos(CancellationToken cancellationToken = default);
 }

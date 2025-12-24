@@ -7,25 +7,29 @@ public class InMemoryContractStorage : IContractStorage
     private readonly Dictionary<string, HashSet<ArkContractEntity>> _contracts = new();
 
     public event EventHandler? ContractsChanged;
-    public Task<IReadOnlySet<ArkContractEntity>> LoadAllContracts(string walletIdentifier)
+
+    public Task<IReadOnlySet<ArkContractEntity>> LoadAllContracts(string walletIdentifier,
+        CancellationToken cancellationToken = default)
     {
         lock (_contracts)
         {
-            return Task.FromResult<IReadOnlySet<ArkContractEntity>>(_contracts.TryGetValue(walletIdentifier, out var contracts) ? contracts : []);
+            return Task.FromResult<IReadOnlySet<ArkContractEntity>>(
+                _contracts.TryGetValue(walletIdentifier, out var contracts) ? contracts : []);
         }
     }
 
-    public Task<IReadOnlySet<ArkContractEntity>> LoadActiveContracts(IReadOnlyCollection<string> walletIdentifier)
+    public Task<IReadOnlySet<ArkContractEntity>> LoadActiveContracts(IReadOnlyCollection<string> walletIdentifier,
+        CancellationToken cancellationToken = default)
     {
         lock (_contracts)
             return Task.FromResult<IReadOnlySet<ArkContractEntity>>(_contracts
-                    .Where(x => walletIdentifier.Contains(x.Key))
-                    .SelectMany(x => x.Value)
-                    .Where(x => x.Important)
-                    .ToHashSet());
+                .Where(x => walletIdentifier.Contains(x.Key))
+                .SelectMany(x => x.Value)
+                .Where(x => x.Important)
+                .ToHashSet());
     }
 
-    public Task<ArkContractEntity?> LoadContractByScript(string script)
+    public Task<ArkContractEntity?> LoadContractByScript(string script, CancellationToken cancellationToken = default)
     {
         lock (_contracts)
         {
@@ -33,7 +37,8 @@ public class InMemoryContractStorage : IContractStorage
         }
     }
 
-    public Task SaveContract(string walletIdentifier, ArkContractEntity contractEntity)
+    public Task SaveContract(string walletIdentifier, ArkContractEntity contractEntity,
+        CancellationToken cancellationToken = default)
     {
         lock (_contracts)
         {

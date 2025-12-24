@@ -1,14 +1,12 @@
 using System.Text.Json;
 using NArk.Abstractions;
 using NArk.Abstractions.Contracts;
-using NArk.Abstractions.Fees;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.VTXOs;
 using NArk.Abstractions.Wallets;
 using NArk.Helpers;
 using NArk.Models;
 using NArk.Transactions;
-using NArk.Transport;
 using NBitcoin;
 using NBitcoin.Secp256k1;
 
@@ -67,17 +65,17 @@ public class IntentGenerationService(
                     }
 
                     var intentSpecs =
-                        await intentScheduler.GetIntentsToSubmit([.. signers.Keys]);
+                        await intentScheduler.GetIntentsToSubmit([.. signers.Keys], token);
 
                     foreach (var intentSpec in intentSpecs)
                     {
-                        var overlappingIntents = await intentStorage.GetIntentsByInputs(activeContractsByWallet.Key, [.. intentSpec.Coins.Select(c => c.Outpoint)], true);
+                        var overlappingIntents = await intentStorage.GetIntentsByInputs(activeContractsByWallet.Key, [.. intentSpec.Coins.Select(c => c.Outpoint)], true, token);
                         if (overlappingIntents.Count != 0)
                             continue;
 
                         var intentTxs = await CreateIntents(
                             network,
-                            [await signers[intentSpec.Coins[0]].SigningEntity.GetPublicKey()],
+                            [await signers[intentSpec.Coins[0]].SigningEntity.GetPublicKey(token)],
                             intentSpec.ValidFrom,
                             intentSpec.ValidUntil,
                             [.. signers.Where(s => intentSpec.Coins.Contains(s.Key)).Select(s => s.Value)],
@@ -91,7 +89,7 @@ public class IntentGenerationService(
                                 intentTxs.RegisterTx.ToBase64(), intentTxs.RegisterMessage, intentTxs.Delete.ToBase64(),
                                 intentTxs.DeleteMessage, null, null, null,
                                 intentSpec.Coins.Select(c => c.Outpoint).ToArray(),
-                                (await signers[intentSpec.Coins[0]].SigningEntity.GetOutputDescriptor()).ToString()));
+                                (await signers[intentSpec.Coins[0]].SigningEntity.GetOutputDescriptor(token)).ToString()), token);
                     }
                 }
 
@@ -104,7 +102,7 @@ public class IntentGenerationService(
         }
     }
 
-    private async Task<PSBT> CreateIntent(string message, Network network, ArkPsbtSigner[] inputs,
+    private static async Task<PSBT> CreateIntent(string message, Network network, ArkPsbtSigner[] inputs,
         IReadOnlyCollection<TxOut>? outputs, CancellationToken cancellationToken = default)
     {
         var firstInput = inputs.First();
@@ -181,11 +179,11 @@ public class IntentGenerationService(
         var psbt = PSBT.FromTransaction(toSign, network);
         psbt.Settings.AutomaticUTXOTrimming = false;
         psbt.AddTransactions(toSpend);
-        psbt.AddCoins(fundProofOutputs);
+        psbt.AddCoins(fundProofOutputs.Cast<ICoin>().ToArray());
         return psbt;
     }
 
-    private async Task<(PSBT RegisterTx, PSBT Delete, string RegisterMessage, string DeleteMessage)> CreateIntents(
+    private static async Task<(PSBT RegisterTx, PSBT Delete, string RegisterMessage, string DeleteMessage)> CreateIntents(
         Network network,
         ECPubKey[] cosigners,
         DateTimeOffset validAt,
@@ -198,7 +196,7 @@ public class IntentGenerationService(
         var msg = new Messages.RegisterIntentMessage
         {
             Type = "register",
-            OnchainOutputsIndexes = outs?.Select((x, i) => (x, i)).Where(o => o.x.Type == ArkTxOutType.Onchain).Select((x, i) => i).ToArray() ?? [],
+            OnchainOutputsIndexes = outs?.Select((x, i) => (x, i)).Where(o => o.x.Type == ArkTxOutType.Onchain).Select((_, i) => i).ToArray() ?? [],
             ValidAt = validAt.ToUnixTimeSeconds(),
             ExpireAt = expireAt.ToUnixTimeSeconds(),
             CosignersPublicKeys = cosigners.Select(c => Convert.ToHexStringLower(c.ToBytes())).ToArray()

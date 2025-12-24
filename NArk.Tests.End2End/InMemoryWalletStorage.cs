@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using NArk.Abstractions.Contracts;
 using NArk.Abstractions.Wallets;
 
 namespace NArk.Tests.End2End;
@@ -8,12 +7,12 @@ public class InMemoryWalletStorage : IWalletStorage
 {
     private readonly ConcurrentDictionary<string, ArkWallet> _wallets = new();
 
-    public Task<IReadOnlySet<ArkWallet>> LoadAllWallets()
+    public Task<IReadOnlySet<ArkWallet>> LoadAllWallets(CancellationToken cancellationToken = default)
     {
         return Task.FromResult<IReadOnlySet<ArkWallet>>(_wallets.Values.ToHashSet());
     }
 
-    public Task<ArkWallet> LoadWallet(string walletIdentifierOrFingerprint)
+    public Task<ArkWallet> LoadWallet(string walletIdentifierOrFingerprint, CancellationToken cancellationToken = default)
     {
         if (_wallets.TryGetValue(walletIdentifierOrFingerprint, out var wallet))
             return Task.FromResult(wallet);
@@ -24,7 +23,8 @@ public class InMemoryWalletStorage : IWalletStorage
                 .First(w => w.WalletFingerprint == walletIdentifierOrFingerprint));
     }
 
-    public Task SaveWallet(string walletId, ArkWallet arkWallet, string? walletFingerprint = null)
+    public Task SaveWallet(string walletId, ArkWallet arkWallet, string? walletFingerprint = null,
+        CancellationToken cancellationToken = default)
     {
         _wallets[walletId] = arkWallet;
         return Task.CompletedTask;

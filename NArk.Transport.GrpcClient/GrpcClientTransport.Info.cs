@@ -1,5 +1,4 @@
 using Ark.V1;
-using NArk.Abstractions;
 using NArk.Extensions;
 using NArk.Scripts;
 using NArk.Transport.GrpcClient.Extensions;
