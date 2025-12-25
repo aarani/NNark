@@ -56,7 +56,6 @@ public class SwapsManagementService : IAsyncDisposable
             clientTransport
         );
 
-
         swapsStorage.SwapsChanged += OnSwapsChanged;
         vtxoStorage.VtxosChanged += OnVtxosChanged;
     }
@@ -68,45 +67,61 @@ public class SwapsManagementService : IAsyncDisposable
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _cacheTask = DoUpdateCache(cancellationToken);
-        _triggerChannel.Writer.TryWrite("BOOT");
+        var multiToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
+        _cacheTask = DoUpdateStorage(multiToken.Token);
+        _triggerChannel.Writer.TryWrite("");
         return Task.CompletedTask;
     }
 
-    private async Task DoUpdateCache(CancellationToken cancellationToken)
+    private async Task DoUpdateStorage(CancellationToken cancellationToken)
     {
-        var multiToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
-        await foreach (var eventDetails in _triggerChannel.Reader.ReadAllAsync(multiToken.Token))
+        await foreach (var eventDetails in _triggerChannel.Reader.ReadAllAsync(cancellationToken))
         {
             if (eventDetails.StartsWith("id:"))
             {
-                await PollSwapState([eventDetails[2..]]);
+                await PollSwapState([eventDetails[2..]], cancellationToken);
             }
-            
+
             var swaps =
-                await _swapsStorage.GetActiveSwaps(null, multiToken.Token);
+                await _swapsStorage.GetActiveSwaps(null, cancellationToken);
             var swapsIdSet = swaps.Select(s => s.SwapId).ToHashSet();
 
-            if (eventDetails != "BOOT" && _swapsToWatch.SetEquals(swapsIdSet))
+            if (_swapsToWatch.SetEquals(swapsIdSet))
                 continue;
 
-            await PollSwapState(swapsIdSet.Except(_swapsToWatch));
-            
+            await PollSwapState(swapsIdSet.Except(_swapsToWatch), cancellationToken);
+
             _swapsToWatch = swapsIdSet;
-            
+
             await _restartCts.CancelAsync();
             _restartCts = CancellationTokenSource.CreateLinkedTokenSource(_shutdownCts.Token);
             _lastStreamTask = DoStatusCheck(swapsIdSet, _restartCts.Token);
         }
     }
 
-    private async Task PollSwapState(IEnumerable<string> idsToPoll)
+    private async Task PollSwapState(IEnumerable<string> idsToPoll, CancellationToken cancellationToken)
     {
         foreach (var idToPoll in idsToPoll)
         {
             var swapStatus = await _boltzClient.GetSwapStatusAsync(idToPoll, _shutdownCts.Token);
-            // Update swap status
+            var swap = await _swapsStorage.GetSwap(idToPoll, cancellationToken);
+            await _swapsStorage.SaveSwap(swap.WalletId,
+                swap with { Status = Map(swapStatus?.Status ?? "Unknown"), UpdatedAt = DateTimeOffset.Now },
+                true, cancellationToken: cancellationToken);
         }
+    }
+
+    private static ArkSwapStatus Map(string status)
+    {
+        return status switch
+        {
+            "swap.created" => ArkSwapStatus.Pending,
+            "invoice.expired" or "swap.expired" or "transaction.failed" or "transaction.refunded" =>
+                ArkSwapStatus.Failed,
+            "transaction.mempool" => ArkSwapStatus.Pending,
+            "transaction.confirmed" or "invoice.settled" => ArkSwapStatus.Settled,
+            _ => ArkSwapStatus.Unknown
+        };
     }
 
     private async Task DoStatusCheck(HashSet<string> swapsIds, CancellationToken cancellationToken)
@@ -131,8 +146,8 @@ public class SwapsManagementService : IAsyncDisposable
         {
             if (response is null)
                 return Task.CompletedTask;
-            
-            if (response.Event == "update" && response is {Channel: "swap.update", Args.Count: > 0})
+
+            if (response.Event == "update" && response is { Channel: "swap.update", Args.Count: > 0 })
             {
                 var swapUpdate = response.Args[0];
                 if (swapUpdate != null)
@@ -171,7 +186,7 @@ public class SwapsManagementService : IAsyncDisposable
                 DateTimeOffset.UtcNow,
                 DateTimeOffset.UtcNow,
                 invoice.Hash.ToString()
-            ), cancellationToken);
+            ), false, cancellationToken);
         try
         {
             await _contractService.ImportContract(walletId, swap.Contract, cancellationToken);
@@ -194,7 +209,7 @@ public class SwapsManagementService : IAsyncDisposable
                     DateTimeOffset.UtcNow,
                     DateTimeOffset.UtcNow,
                     invoice.Hash.ToString()
-                ), cancellationToken);
+                ), false, cancellationToken);
             throw;
         }
     }

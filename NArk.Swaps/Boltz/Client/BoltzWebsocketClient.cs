@@ -40,7 +40,7 @@ public class BoltzWebsocketClient : IAsyncDisposable
     {
         var client = new BoltzWebsocketClient(webSocketUri);
         await client.ConnectAsync(cancellationToken);
-        
+
         return client;
     }
 
@@ -157,7 +157,7 @@ public class BoltzWebsocketClient : IAsyncDisposable
     {
         _ = await SendRequest("unsubscribe", "swap.update", swapIds, cancellationToken);
     }
-    
+
     /// <summary>
     /// Subscribes to WebSocket updates for specific swap IDs.
     /// </summary>
@@ -165,57 +165,57 @@ public class BoltzWebsocketClient : IAsyncDisposable
     {
         _ = await SendRequest("subscribe", "swap.update", swapIds, cancellationToken);
     }
-    
+
     private async Task ReceiveLoopAsync(CancellationToken cancellationToken)
     {
         var buffer = new ArraySegment<byte>(new byte[8192]);
-        
-            while (_webSocket is { State: WebSocketState.Open } && !cancellationToken.IsCancellationRequested)
+
+        while (_webSocket is { State: WebSocketState.Open } && !cancellationToken.IsCancellationRequested)
+        {
+            try
             {
+                using var ms = new MemoryStream();
+                WebSocketReceiveResult result;
+                do
+                {
+                    if (cancellationToken.IsCancellationRequested) break;
+                    result = await _webSocket.ReceiveAsync(buffer, cancellationToken);
+
+                    if (result.MessageType == WebSocketMessageType.Close)
+                    {
+                        break;
+                    }
+
+                    if (buffer.Array != null) ms.Write(buffer.Array, buffer.Offset, result.Count);
+                } while (!result.EndOfMessage && !cancellationToken.IsCancellationRequested);
+
+                if (cancellationToken.IsCancellationRequested) break;
+
+
+                ms.Seek(0, SeekOrigin.Begin);
                 try
                 {
-                    using var ms = new MemoryStream();
-                    WebSocketReceiveResult result;
-                    do
-                    {
-                        if (cancellationToken.IsCancellationRequested) break;
-                        result = await _webSocket.ReceiveAsync(buffer, cancellationToken);
+                    var response =
+                        await JsonSerializer.DeserializeAsync<WebSocketResponse>(ms,
+                            cancellationToken: cancellationToken);
 
-                        if (result.MessageType == WebSocketMessageType.Close)
-                        {
-                            break;
-                        }
-
-                        if (buffer.Array != null) ms.Write(buffer.Array, buffer.Offset, result.Count);
-                    } while (!result.EndOfMessage && !cancellationToken.IsCancellationRequested);
-
-                    if (cancellationToken.IsCancellationRequested) break;
-
-
-                    ms.Seek(0, SeekOrigin.Begin);
-                    try
-                    {
-                        var response =
-                            await JsonSerializer.DeserializeAsync<WebSocketResponse>(ms,
-                                cancellationToken: cancellationToken);
-                        
-                        _ = OnAnyEventReceived?.Invoke(response);
-                    }
-                    catch
-                    {
-                        
-                        _ = OnAnyEventReceived?.Invoke(null);
-                    }
-
+                    _ = OnAnyEventReceived?.Invoke(response);
                 }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                catch
                 {
-                }
-            }
 
-            await (_receiveLoopCts != null ? _receiveLoopCts.CancelAsync() : Task.CompletedTask);
-        
-       
+                    _ = OnAnyEventReceived?.Invoke(null);
+                }
+
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+            }
+        }
+
+        await (_receiveLoopCts != null ? _receiveLoopCts.CancelAsync() : Task.CompletedTask);
+
+
     }
 
 
@@ -247,20 +247,20 @@ public class BoltzWebsocketClient : IAsyncDisposable
     /// <returns>A task that completes when the WebSocket is disconnected.</returns>
     public async Task WaitUntilDisconnected(CancellationToken cancellationToken)
     {
-        if (_webSocket is not {State: WebSocketState.Open})
+        if (_webSocket is not { State: WebSocketState.Open })
         {
             return; // Already disconnected or never connected
         }
 
         var tcs = new TaskCompletionSource<bool>();
-        
+
         // Set up cancellation
         await using var registration = cancellationToken.Register(() => tcs.TrySetCanceled());
-        
+
         // Set up an event handler to monitor connection state
-        Task connectionStateHandler(WebSocketResponse _) 
+        Task connectionStateHandler(WebSocketResponse _)
         {
-            if (_webSocket is not {State: WebSocketState.Open})
+            if (_webSocket is not { State: WebSocketState.Open })
             {
                 tcs.TrySetResult(true);
             }
@@ -270,21 +270,21 @@ public class BoltzWebsocketClient : IAsyncDisposable
         try
         {
             OnAnyEventReceived += connectionStateHandler!;
-            
+
             // If the connection drops without any events, the receive loop will terminate
             // We'll check the state periodically to handle this case
-            while (!cancellationToken.IsCancellationRequested && 
+            while (!cancellationToken.IsCancellationRequested &&
                    _webSocket is { State: WebSocketState.Open })
             {
                 await Task.Delay(500, cancellationToken);
-                
+
                 // If connection dropped, complete the task
                 if (_webSocket == null || _webSocket.State != WebSocketState.Open)
                 {
                     tcs.TrySetResult(true);
                 }
             }
-            
+
             await tcs.Task;
         }
         finally

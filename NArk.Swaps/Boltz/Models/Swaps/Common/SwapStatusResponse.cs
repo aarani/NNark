@@ -7,5 +7,5 @@ public class SwapStatusResponse
     [JsonPropertyName("status")]
     public required string Status { get; set; }
 
-   
+
 }

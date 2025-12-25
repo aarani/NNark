@@ -37,5 +37,5 @@ public class ReverseRequest
     public string? Description { get; set; }
     [JsonPropertyName("descriptionHash")]
     public string? DescriptionHash { get; set; }
-    
+
 }

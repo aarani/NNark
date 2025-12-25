@@ -17,6 +17,8 @@ public enum ArkSwapStatus
     Pending,
     Settled,
     Failed,
+    PendingRefund,
+    Refunded,
     Unknown
 }
 

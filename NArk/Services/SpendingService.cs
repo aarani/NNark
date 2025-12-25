@@ -14,7 +14,7 @@ public class SpendingService(
     ISigningService signingService,
     IContractService paymentService,
     IClientTransport transport
-): ISpendingService
+) : ISpendingService
 {
     public async Task<uint256> Spend(string walletId, ArkTxOut[] outputs, CancellationToken cancellationToken = default)
     {
@@ -79,11 +79,11 @@ public class SpendingService(
                 ..outputs,
                 new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!)
             ];
-            
+
         }
         else if (change > 0 && (hasExplicitSubdustOutput + 1) <= TransactionHelpers.MaxOpReturnOutputs)
         {
-            outputs = [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!), ..outputs];
+            outputs = [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!), .. outputs];
         }
 
         var transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(transport);

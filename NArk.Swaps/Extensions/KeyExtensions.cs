@@ -17,7 +17,7 @@ internal static class KeyExtensions
         var xOnly = pubKey.TaprootInternalKey.ToBytes();
         return ECXOnlyPubKey.Create(xOnly);
     }
-    
+
     public static OutputDescriptor ParseOutputDescriptor(string str, Network network)
     {
         if (!HexEncoder.IsWellFormed(str))

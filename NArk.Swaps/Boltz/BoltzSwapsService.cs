@@ -26,7 +26,7 @@ internal class BoltzSwapService(
         CancellationToken cancellationToken = default)
     {
         var extractedSender = OutputDescriptorHelpers.Extract(sender);
-        
+
         var operatorTerms = await clientTransport.GetServerInfoAsync(cancellationToken);
 
         var response = await boltzClient.CreateSubmarineSwapAsync(new SubmarineRequest()
@@ -39,7 +39,7 @@ internal class BoltzSwapService(
 
         if (invoice.PaymentHash is null)
             throw new InvalidOperationException("Invoice does not contain valid payment hash");
-        
+
         var hash = new uint160(Hashes.RIPEMD160(invoice.PaymentHash.ToBytes(false)), false);
 
         var vhtlcContract = new VHTLCContract(
@@ -81,14 +81,14 @@ internal class BoltzSwapService(
         {
             From = "BTC",
             To = "ARK",
-            OnchainAmount = createInvoiceRequest.Amount.MilliSatoshi/1000,
+            OnchainAmount = createInvoiceRequest.Amount.MilliSatoshi / 1000,
             ClaimPublicKey = Convert.ToHexStringLower(extractedReceiver.PubKey?.ToBytes() ?? extractedReceiver.XOnlyPubKey.ToBytes()), // Receiver will claim the VTXO
             PreimageHash = Encoders.Hex.EncodeData(preimageHash),
             AcceptZeroConf = true,
             DescriptionHash = createInvoiceRequest.DescriptionHash?.ToString(),
             Description = createInvoiceRequest.Description,
             InvoiceExpirySeconds = Convert.ToInt32(createInvoiceRequest.Expiry.TotalSeconds),
-            
+
         };
 
         var response = await boltzClient.CreateReverseSwapAsync(request, cancellationToken);
@@ -97,19 +97,19 @@ internal class BoltzSwapService(
         {
             throw new InvalidOperationException("Failed to create reverse swap, null response from Boltz");
         }
-        
+
         // Extract the sender key from Boltz's response (refundPublicKey)
         if (string.IsNullOrEmpty(response.RefundPublicKey))
         {
             throw new InvalidOperationException("Boltz did not provide refund public key");
         }
-        
+
         var bolt11 = BOLT11PaymentRequest.Parse(response.Invoice, operatorTerms.Network);
         if (bolt11.PaymentHash is null || !bolt11.PaymentHash.ToBytes(false).SequenceEqual(preimageHash))
         {
             throw new InvalidOperationException("Boltz did not provide the correct preimage hash");
         }
-        
+
         // Verify the invoice amount is greater than onchain amount (includes fees)
         var invoiceAmountSats = bolt11.MinimumAmount.ToUnit(LightMoneyUnit.Satoshi);
         var onchainAmountSats = createInvoiceRequest.Amount.ToUnit(LightMoneyUnit.Satoshi);
@@ -117,9 +117,9 @@ internal class BoltzSwapService(
         {
             throw new InvalidOperationException($"Invoice amount ({invoiceAmountSats} sats) must be greater than onchain amount ({onchainAmountSats} sats) to cover swap fees");
         }
-        
+
         var swapFee = invoiceAmountSats - onchainAmountSats;
-        
+
         var vhtlcContract = new VHTLCContract(
             server: operatorTerms.SignerKey,
             sender: KeyExtensions.ParseOutputDescriptor(response.RefundPublicKey, operatorTerms.Network),
@@ -127,8 +127,8 @@ internal class BoltzSwapService(
             preimage: preimage,
             refundLocktime: new LockTime(response.TimeoutBlockHeights.Refund),
             unilateralClaimDelay: ParseSequence(response.TimeoutBlockHeights.UnilateralClaim),
-            unilateralRefundDelay:ParseSequence(response.TimeoutBlockHeights.UnilateralRefund),
-            unilateralRefundWithoutReceiverDelay: ParseSequence( response.TimeoutBlockHeights
+            unilateralRefundDelay: ParseSequence(response.TimeoutBlockHeights.UnilateralRefund),
+            unilateralRefundWithoutReceiverDelay: ParseSequence(response.TimeoutBlockHeights
                 .UnilateralRefundWithoutReceiver)
         );
 

@@ -11,7 +11,7 @@ namespace NArk.Swaps.Boltz.Models.Swaps.Submarine
 
         [JsonPropertyName("expectedAmount")] public long ExpectedAmount { get; set; }
 
-        [JsonPropertyName("claimPublicKey")] public required string ClaimPublicKey { get; set; } 
+        [JsonPropertyName("claimPublicKey")] public required string ClaimPublicKey { get; set; }
 
         [JsonPropertyName("acceptZeroConf")] public bool AcceptZeroConf { get; set; }
 
