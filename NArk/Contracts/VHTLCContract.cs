@@ -109,6 +109,12 @@ public class VHTLCContract : ArkContract
         throw new AdditionalInformationRequiredException("This operation requires more info than we have here");
     }
 
+    public ArkCoin ToCoopRefundCoin(string walletIdentifier, ArkVtxo vtxo)
+    {
+        return new ArkCoin(walletIdentifier, this, vtxo.ExpiresAt, vtxo.ExpiresAtHeight, vtxo.OutPoint, vtxo.TxOut, Sender,
+            CreateCooperativeScript(), null, null, null, vtxo.Recoverable);
+    }
+
     public static ArkContract? Parse(Dictionary<string, string> contractData, Network network)
     {
         var server = KeyExtensions.ParseOutputDescriptor(contractData["server"], network);

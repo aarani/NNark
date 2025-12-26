@@ -63,4 +63,17 @@ public partial class BoltzClient
         return await PostAsJsonAsync<ReverseRequest, ReverseResponse>("v2/swap/reverse", request, cancellation);
     }
 
+
+    /// <summary>
+    /// Requests a cooperative refund for a submarine swap.
+    /// Boltz will co-sign the refund transaction to return funds to the sender.
+    /// </summary>
+    /// <param name="swapId">The ID of the submarine swap to refund.</param>
+    /// <param name="request">The refund request containing transaction and checkpoint PSBTs.</param>
+    /// <param name="cancellation">Cancellation token.</param>
+    /// <returns>The refund response with Boltz-signed transactions.</returns>
+    public async Task<SubmarineRefundResponse> RefundSubmarineSwapAsync(string swapId, SubmarineRefundRequest request, CancellationToken cancellation)
+    {
+        return await PostAsJsonAsync<SubmarineRefundRequest, SubmarineRefundResponse>($"v2/swap/submarine/{swapId}/refund/ark", request, cancellation);
+    }
 }

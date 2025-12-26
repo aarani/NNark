@@ -200,7 +200,7 @@ public static class TransactionHelpers
             return new GenericArkContract(coin.Coin.Contract.Server, scriptBuilders);
         }
 
-        private async Task SubmitArkTransaction(
+        public async Task SubmitArkTransaction(
             IReadOnlyCollection<ArkPsbtSigner> arkCoins,
             PSBT arkTx,
             SortedSet<IndexedPSBT> checkpoints,

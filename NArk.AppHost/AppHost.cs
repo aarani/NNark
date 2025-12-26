@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Net.Sockets;
+using System.Text.Json;
 using CliWrap;
 using CliWrap.Buffered;
 using Microsoft.Extensions.DependencyInjection;
@@ -71,6 +72,9 @@ var arkdDb = postgres
 
 var nbxplorerDb = postgres
     .AddDatabase("nbxplorer-db", "nbxplorer");
+
+var boltzDb = postgres
+    .AddDatabase("boltz-db", "boltz");
 
 var nbxplorer =
     builder
@@ -217,6 +221,225 @@ async Task StartArkResource(ContainerResource cr, ResourceReadyEvent @event, Can
         .WithArguments(["exec", "-t", "ark", "ark", "redeem-notes", "-n", note, "--password", "secret"])
         .ExecuteBufferedAsync(cancellationToken);
 }
+
+
+var boltzLnd =
+    builder
+        .AddContainer("boltz-lnd", "btcpayserver/lnd", "v0.19.3-beta")
+        .WithContainerName("boltz-lnd")
+        .WithContainerNetworkAlias("boltz-lnd")
+        .WithEnvironment("LND_CHAIN", "btc")
+        .WithEnvironment("LND_ENVIRONMENT", "regtest")
+        .WithEnvironment("LND_EXPLORERURL", "http://nbxplorer:32838/")
+        .WithEnvironment("LND_REST_LISTEN_HOST", "http://boltz-lnd:8080")
+        .WithEnvironment("LND_EXTRA_ARGS", @"bitcoin.node=bitcoind
+maxpendingchannels=10
+rpclisten=0.0.0.0:10009
+restlisten=boltz-lnd:8080
+bitcoind.rpchost=bitcoin:18443
+bitcoind.rpcuser=admin1
+bitcoind.rpcpass=123
+bitcoind.zmqpubrawblock=tcp://bitcoin:28332
+bitcoind.zmqpubrawtx=tcp://bitcoin:28333
+db.bolt.auto-compact=true
+db.prune-revocation=true
+alias=Ark Labs
+externalip=boltz-lnd:9735
+protocol.option-scid-alias=true
+protocol.wumbo-channels=true
+accept-keysend=true
+minchansize=25000
+noseedbackup=false
+gc-canceled-invoices-on-startup=true
+coin-selection-strategy=random
+protocol.custom-message=513
+protocol.custom-nodeann=39
+protocol.custom-init=39
+no-rest-tls=1
+tlsextradomain=boltz-lnd
+debuglevel=debug
+restcors=*")
+        .WithVolume("nark-boltz-lnd", "/root/.lnd")
+        .WithEndpoint(9736, 9735, protocol: ProtocolType.Tcp, name: "p2p")
+        .WithEndpoint(10010, 10009, protocol: ProtocolType.Tcp, name: "rpc")
+        .OnResourceReady(FundBoltzLnd)
+        .WaitFor(bitcoin)
+        .WaitFor(nbxplorer);
+
+async Task FundBoltzLnd(ContainerResource containerResource, ResourceReadyEvent @event, CancellationToken cancellationToken)
+{
+    var addressResponse = await Cli.Wrap("docker")
+        .WithArguments(["exec", "boltz-lnd", "lncli", "--network=regtest", "newaddress", "p2wkh"])
+        .ExecuteBufferedAsync(cancellationToken);
+
+    var address = (JsonSerializer.Deserialize<dynamic>(addressResponse.StandardOutput)?.address! as string)!.Trim();
+    var chopsticksEndpoint = await chopsticks.GetEndpoint("http", null!).GetValueAsync(cancellationToken);
+    await new HttpClient().PostAsJsonAsync($"{chopsticksEndpoint}/faucet", new
+    {
+        amount = 1,
+        address = address
+    }, cancellationToken: cancellationToken);
+}
+
+var lnd =
+    builder
+        .AddContainer("lnd", "btcpayserver/lnd", "v0.19.3-beta")
+        .WithContainerName("lnd")
+        .WithContainerNetworkAlias("lnd")
+        .WithEnvironment("LND_CHAIN", "btc")
+        .WithEnvironment("LND_ENVIRONMENT", "regtest")
+        .WithEnvironment("LND_EXPLORERURL", "http://nbxplorer:32838/")
+        .WithEnvironment("LND_REST_LISTEN_HOST", "http://lnd:8080")
+        .WithEnvironment("LND_EXTRA_ARGS", @"bitcoin.node=bitcoind
+maxpendingchannels=10
+rpclisten=0.0.0.0:10009
+restlisten=lnd:8080
+bitcoind.rpchost=bitcoin:18443
+bitcoind.rpcuser=admin1
+bitcoind.rpcpass=123
+bitcoind.zmqpubrawblock=tcp://bitcoin:28332
+bitcoind.zmqpubrawtx=tcp://bitcoin:28333
+db.bolt.auto-compact=true
+db.prune-revocation=true
+alias=Ark Labs User
+externalip=lnd:9735
+protocol.option-scid-alias=true
+protocol.wumbo-channels=true
+accept-keysend=true
+minchansize=25000
+noseedbackup=false
+gc-canceled-invoices-on-startup=true
+coin-selection-strategy=random
+protocol.custom-message=513
+protocol.custom-nodeann=39
+protocol.custom-init=39
+no-rest-tls=1
+debuglevel=debug
+restcors=*
+tlsextradomain=lnd")
+        .WithVolume("nark-lnd", "/root/.lnd")
+        .WithEndpoint(9735, 9735, protocol: ProtocolType.Tcp, name: "p2p")
+        .WithEndpoint(10009, 10009, protocol: ProtocolType.Tcp, name: "rpc")
+        .WaitFor(bitcoin)
+        .WaitFor(nbxplorer)
+        .WaitFor(boltzLnd);
+
+var boltz =
+    builder
+        .AddContainer("boltz", "boltz/boltz", "ark")
+        .WithContainerName("boltz")
+        .WithContainerNetworkAlias("boltz")
+        .WithEndpoint(9000, 9000, protocol: ProtocolType.Tcp, name: "grpc")
+        .WithEndpoint(9001, 9001, protocol: ProtocolType.Tcp, name: "api")
+        .WithEndpoint(9004, 9004, protocol: ProtocolType.Tcp, name: "ws")
+        .WithEnvironment("BOLTZ_CONFIG", @"loglevel = ""debug""
+network = ""regtest""
+[ark]
+host = ""boltz-fulmine""
+port = 7000
+
+[api]
+host = ""0.0.0.0""
+port = 9001
+cors = ""*""
+
+[grpc]
+host = ""0.0.0.0""
+port = 9000
+
+[sidecar]
+[sidecar.grpc]
+host = ""0.0.0.0""
+port = 9003
+
+[sidecar.ws]
+host = ""0.0.0.0""
+port = 9004
+
+[sidecar.api]
+host = ""0.0.0.0""
+port = 9005
+
+[postgres]
+host = ""postgres""
+port = 5432
+database = ""boltz""
+username = ""postgres""
+password = ""postgres""
+
+[swap]
+deferredClaimSymbols = [""BTC""]
+
+[[pairs]]
+base = ""ARK""
+quote = ""BTC""
+rate = 1
+fee = 0
+swapInFee = 0.00
+maxSwapAmount = 4294967
+minSwapAmount = 1000
+
+[pairs.timeoutDelta]
+reverse = 1440
+chain = 1440
+swapMinimal = 1440
+swapMaximal = 2880
+swapTaproot = 10080
+
+[[currencies]]
+symbol = ""BTC""
+network = ""bitcoinRegtest""
+minWalletBalance = 10000000
+minLocalBalance = 10000000
+minRemoteBalance = 10000000
+maxSwapAmount = 4294967
+minSwapAmount = 50000
+maxZeroConfAmount = 100000
+preferredWallet = ""core""
+
+[currencies.chain]
+host = ""bitcoin""
+port = 18443
+user = ""admin1""
+password = ""123""
+zmqpubrawtx = ""tcp://bitcoin:28333""
+zmqpubrawblock = ""tcp://bitcoin:28332""
+
+[currencies.lnd]
+host = ""boltz-lnd""
+port = 10009
+certpath = ""/home/boltz/.lnd/tls.cert""
+macaroonpath = ""/home/boltz/.lnd/data/chain/bitcoin/regtest/admin.macaroon""")
+        .WithVolume("nark-boltz", "/home/boltz/.boltz")
+        .WithVolume("nark-boltz-lnd", "/home/boltz/.lnd")
+        .WithEntrypoint("sh")
+        .WithArgs("-c", "echo \"$BOLTZ_CONFIG\" > /home/boltz/.boltz/boltz.config && boltzd --datadir /home/boltz/.boltz --configpath /home/boltz/.boltz/boltz.config")
+        .WaitFor(boltzDb)
+        .WaitFor(bitcoin)
+        .WaitFor(boltzLnd);
+
+var boltzFulmine =
+    builder
+        .AddContainer("boltz-fulmine", "ghcr.io/arklabshq/fulmine", "v0.3.10")
+        .WithContainerName("boltz-fulmine")
+        .WithContainerNetworkAlias("boltz-fulmine")
+        .WithEnvironment("FULMINE_ARK_SERVER", "http://ark:7070")
+        .WithEnvironment("FULMINE_ESPLORA_URL", "http://chopsticks:3000")
+        .WithEnvironment("FULMINE_NO_MACAROONS", "true")
+        .WithEnvironment("FULMINE_BOLTZ_URL", "http://boltz:9001")
+        .WithEnvironment("FULMINE_BOLTZ_WS_URL", "ws://boltz:9001")
+        .WithEnvironment("FULMINE_DISABLE_TELEMETRY", "true")
+        .WithEnvironment("FULMINE_UNLOCKER_TYPE", "env")
+        .WithEnvironment("FULMINE_UNLOCKER_PASSWORD", "password")
+        .WithEnvironment("FULMINE_LND_URL", "http://boltz-lnd:10009")
+        .WithEnvironment("FULMINE_LND_DATADIR", "/root/.lnd")
+        .WithEndpoint(7002, 7000, protocol: ProtocolType.Tcp, name: "grpc")
+        .WithHttpEndpoint(7003, 7001, name: "api")
+        .WithHttpHealthCheck("/api/v1/wallet/status", null, "api")
+        .WithVolume("nark-boltz-fulmine", "/app/data")
+        .WithVolume("nark-boltz-lnd", "/root/.lnd")
+        .WaitFor(boltz)
+        .WaitFor(boltzLnd);
 
 builder
     .Build()
