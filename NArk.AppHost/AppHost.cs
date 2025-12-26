@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using CliWrap;
 using CliWrap.Buffered;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,7 +20,6 @@ var bitcoin =
         .WithEndpoint(28332, 28332, protocol: ProtocolType.Tcp, name: "zmqpub-block")
         .WithEndpoint(28333, 28333, protocol: ProtocolType.Tcp, name: "zmqpub-tx")
         .WithVolume("nark-bitcoind", target: "/data/.bitcoin")
-        .WithLifetime(ContainerLifetime.Persistent)
         .WithContainerFiles("/data/.bitcoin/", "Assets/bitcoin.conf");
 
 var electrs =
@@ -34,7 +34,8 @@ var electrs =
             "-vvvv",
             "--network", "regtest", "--daemon-dir", "/config",
             "--daemon-rpc-addr", "bitcoin:18443", "--cookie", "admin1:123",
-            "--http-addr", "0.0.0.0:30000", "--electrum-rpc-addr", "0.0.0.0:50000", "--cors", "\"*\"", "--jsonrpc-import"
+            "--http-addr", "0.0.0.0:30000", "--electrum-rpc-addr", "0.0.0.0:50000", "--cors", "\"*\"",
+            "--jsonrpc-import"
         )
         .WithVolume("nark-electrs", "/config")
         .WaitFor(bitcoin);
@@ -187,8 +188,10 @@ async Task StartArkResource(ContainerResource cr, ResourceReadyEvent @event, Can
 
     var arkInit =
         await Cli.Wrap("docker")
-            .WithArguments(["exec", "-t", "ark", "ark", "init", "--password", "secret", "--server-url", "localhost:7070",
-                "--explorer", "http://chopsticks:3000"])
+            .WithArguments([
+                "exec", "-t", "ark", "ark", "init", "--password", "secret", "--server-url", "localhost:7070",
+                "--explorer", "http://chopsticks:3000"
+            ])
             .ExecuteBufferedAsync(cancellationToken);
 
     if (!arkInit.IsSuccess)
@@ -266,19 +269,39 @@ restcors=*")
         .WaitFor(bitcoin)
         .WaitFor(nbxplorer);
 
-async Task FundBoltzLnd(ContainerResource containerResource, ResourceReadyEvent @event, CancellationToken cancellationToken)
+async Task FundBoltzLnd(ContainerResource containerResource, ResourceReadyEvent @event,
+    CancellationToken cancellationToken)
 {
+    await Task.Delay(TimeSpan.FromSeconds(20), cancellationToken);
     var addressResponse = await Cli.Wrap("docker")
         .WithArguments(["exec", "boltz-lnd", "lncli", "--network=regtest", "newaddress", "p2wkh"])
         .ExecuteBufferedAsync(cancellationToken);
 
-    var address = (JsonSerializer.Deserialize<dynamic>(addressResponse.StandardOutput)?.address! as string)!.Trim();
+    var address =
+        (JsonSerializer.Deserialize<JsonObject>(addressResponse.StandardOutput)?["address"]?.GetValue<string>()
+         ?? throw new InvalidOperationException("Boltz-LND bootup failed...")).Trim();
     var chopsticksEndpoint = await chopsticks.GetEndpoint("http", null!).GetValueAsync(cancellationToken);
     await new HttpClient().PostAsJsonAsync($"{chopsticksEndpoint}/faucet", new
     {
-        amount = 1,
+        amount = 2,
         address = address
     }, cancellationToken: cancellationToken);
+
+    var walletBalanceResponse =
+        await Cli.Wrap("docker")
+            .WithArguments(["exec", "boltz-lnd", "lncli", "--network=regtest", "walletbalance"])
+            .ExecuteBufferedAsync(cancellationToken);
+    var balance =
+        decimal.Parse(
+            (JsonSerializer.Deserialize<JsonObject>(walletBalanceResponse.StandardOutput)?["account_balance"]?
+                 ["default"]?["confirmed_balance"]?.GetValue<string>()
+             ?? throw new InvalidOperationException("Boltz-LND bootup failed...")).Trim());
+
+    if (balance < 1_000_000)
+    {
+        throw new InvalidOperationException(
+            $"ERROR: LND wallet balance ({balance}) is less than 1,000,000 sats. Funding failed.");
+    }
 }
 
 var lnd =
@@ -320,9 +343,94 @@ tlsextradomain=lnd")
         .WithVolume("nark-lnd", "/root/.lnd")
         .WithEndpoint(9735, 9735, protocol: ProtocolType.Tcp, name: "p2p")
         .WithEndpoint(10009, 10009, protocol: ProtocolType.Tcp, name: "rpc")
+        .OnResourceReady(CreateLnd2LndChannel)
         .WaitFor(bitcoin)
         .WaitFor(nbxplorer)
         .WaitFor(boltzLnd);
+
+async Task CreateLnd2LndChannel(ContainerResource resource, ResourceReadyEvent @event,
+    CancellationToken cancellationToken)
+{
+    await Task.Delay(TimeSpan.FromSeconds(20), cancellationToken);
+    var pubKeyResponse = await Cli.Wrap("docker")
+        .WithArguments(["exec", "lnd", "lncli", "--network=regtest", "getinfo"])
+        .ExecuteBufferedAsync(cancellationToken);
+    var counterpartyPubKey = JsonSerializer.Deserialize<JsonObject>(pubKeyResponse.StandardOutput)?["identity_pubkey"]?
+        .GetValue<string>() ?? throw new InvalidOperationException("ERROR: LND did not provide pubkey for channel creation");
+    await Cli.Wrap("docker")
+        .WithArguments([
+            "exec", "boltz-lnd", "lncli", "--network=regtest", "openchannel", $"--node_key={counterpartyPubKey}",
+            "--connect=lnd:9735", "--local_amt=1000000", "--sat_per_vbyte=1", "--min_confs=0"
+        ])
+        .ExecuteBufferedAsync(cancellationToken);
+
+    await Cli.Wrap("docker")
+        .WithArguments(["exec", "bitcoin", "bitcoin-cli", "-rpcwallet=", "-generate", "10"])
+        .ExecuteBufferedAsync(cancellationToken);
+
+    var createInvoiceResponse = await Cli.Wrap("docker")
+        .WithArguments(["exec", "lnd", "lncli", "--network=regtest", "addinvoice", "--amt", "500000"])
+        .ExecuteBufferedAsync(cancellationToken);
+
+    var invoice =
+        (
+            JsonSerializer.Deserialize<JsonObject>(createInvoiceResponse.StandardOutput)?["payment_request"]?.GetValue<string>()
+                ?? throw new InvalidOperationException("Invoice creation on LND failed")
+        ).Trim();
+
+    await Cli.Wrap("docker")
+        .WithArguments(["exec", "boltz-lnd", "lncli", "--network=regtest", "payinvoice", "--force", invoice])
+        .ExecuteBufferedAsync(cancellationToken);
+}
+
+
+var boltzFulmine =
+    builder
+        .AddContainer("boltz-fulmine", "ghcr.io/arklabshq/fulmine", "v0.3.10")
+        .WithContainerName("boltz-fulmine")
+        .WithContainerNetworkAlias("boltz-fulmine")
+        .WithEnvironment("FULMINE_ARK_SERVER", "http://ark:7070")
+        .WithEnvironment("FULMINE_ESPLORA_URL", "http://chopsticks:3000")
+        .WithEnvironment("FULMINE_NO_MACAROONS", "true")
+        .WithEnvironment("FULMINE_BOLTZ_URL", "http://boltz:9001")
+        .WithEnvironment("FULMINE_BOLTZ_WS_URL", "ws://boltz:9001")
+        .WithEnvironment("FULMINE_DISABLE_TELEMETRY", "true")
+        .WithEnvironment("FULMINE_UNLOCKER_TYPE", "env")
+        .WithEnvironment("FULMINE_UNLOCKER_PASSWORD", "password")
+        .WithEnvironment("FULMINE_LND_URL", "http://boltz-lnd:10009")
+        .WithEnvironment("FULMINE_LND_DATADIR", "/root/.lnd")
+        .WithEndpoint(7002, 7000, protocol: ProtocolType.Tcp, name: "grpc")
+        .WithHttpEndpoint(7003, 7001, name: "api")
+        .WithHttpHealthCheck("/api/v1/wallet/status", null, "api")
+        .OnResourceReady(UnlockAndFundFulmine)
+        .WithVolume("nark-boltz-fulmine", "/app/data")
+        .WithVolume("nark-boltz-lnd", "/root/.lnd")
+        .WaitFor(boltzLnd);
+
+async Task UnlockAndFundFulmine(ContainerResource resource, ResourceReadyEvent @event, CancellationToken cancellationToken)
+{
+    var fulmineEndpoint =
+        await resource.GetEndpoint("api", null!).GetValueAsync(cancellationToken);
+    var httpClient = new HttpClient() { BaseAddress = new Uri(fulmineEndpoint!) };
+
+    var genSeedResponse =
+        await httpClient.GetFromJsonAsync<JsonObject>($"/api/v1/wallet/genseed", cancellationToken: cancellationToken);
+    var privateKey = genSeedResponse?["nsec"]?.GetValue<string>() ?? throw new InvalidOperationException("Fulmine's GenSeed didn't work properly.");
+
+    await httpClient.PostAsJsonAsync("/api/v1/wallet/create", new
+    {
+        private_key = privateKey,
+        password = "password",
+        server_url = "http://ark:7070"
+    }, cancellationToken: cancellationToken);
+
+    await httpClient.PostAsJsonAsync("/api/v1/wallet/unlock", new
+    {
+        password = "password"
+    }, cancellationToken: cancellationToken);
+
+    //TODO: fund fulmine
+}
 
 var boltz =
     builder
@@ -413,33 +521,13 @@ macaroonpath = ""/home/boltz/.lnd/data/chain/bitcoin/regtest/admin.macaroon""")
         .WithVolume("nark-boltz", "/home/boltz/.boltz")
         .WithVolume("nark-boltz-lnd", "/home/boltz/.lnd")
         .WithEntrypoint("sh")
-        .WithArgs("-c", "echo \"$BOLTZ_CONFIG\" > /home/boltz/.boltz/boltz.config && boltzd --datadir /home/boltz/.boltz --configpath /home/boltz/.boltz/boltz.config")
+        .WithArgs("-c",
+            "echo \"$BOLTZ_CONFIG\" > /home/boltz/.boltz/boltz.config && boltzd --datadir /home/boltz/.boltz --configpath /home/boltz/.boltz/boltz.config")
         .WaitFor(boltzDb)
         .WaitFor(bitcoin)
-        .WaitFor(boltzLnd);
-
-var boltzFulmine =
-    builder
-        .AddContainer("boltz-fulmine", "ghcr.io/arklabshq/fulmine", "v0.3.10")
-        .WithContainerName("boltz-fulmine")
-        .WithContainerNetworkAlias("boltz-fulmine")
-        .WithEnvironment("FULMINE_ARK_SERVER", "http://ark:7070")
-        .WithEnvironment("FULMINE_ESPLORA_URL", "http://chopsticks:3000")
-        .WithEnvironment("FULMINE_NO_MACAROONS", "true")
-        .WithEnvironment("FULMINE_BOLTZ_URL", "http://boltz:9001")
-        .WithEnvironment("FULMINE_BOLTZ_WS_URL", "ws://boltz:9001")
-        .WithEnvironment("FULMINE_DISABLE_TELEMETRY", "true")
-        .WithEnvironment("FULMINE_UNLOCKER_TYPE", "env")
-        .WithEnvironment("FULMINE_UNLOCKER_PASSWORD", "password")
-        .WithEnvironment("FULMINE_LND_URL", "http://boltz-lnd:10009")
-        .WithEnvironment("FULMINE_LND_DATADIR", "/root/.lnd")
-        .WithEndpoint(7002, 7000, protocol: ProtocolType.Tcp, name: "grpc")
-        .WithHttpEndpoint(7003, 7001, name: "api")
-        .WithHttpHealthCheck("/api/v1/wallet/status", null, "api")
-        .WithVolume("nark-boltz-fulmine", "/app/data")
-        .WithVolume("nark-boltz-lnd", "/root/.lnd")
-        .WaitFor(boltz)
-        .WaitFor(boltzLnd);
+        .WaitFor(boltzLnd)
+        .WaitFor(boltzFulmine)
+        .WaitFor(lnd);
 
 builder
     .Build()
