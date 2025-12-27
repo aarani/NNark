@@ -5,7 +5,7 @@ namespace NArk.Tests.End2End;
 
 public class InMemoryIntentStorage : IIntentStorage
 {
-    public event EventHandler? IntentChanged;
+    public event EventHandler<ArkIntent>? IntentChanged;
     private readonly Dictionary<string, HashSet<ArkIntent>> _intents = new();
 
     public Task SaveIntent(string walletIdentifier, ArkIntent intent, CancellationToken cancellationToken = default)
@@ -22,7 +22,7 @@ public class InMemoryIntentStorage : IIntentStorage
 
             try
             {
-                IntentChanged?.Invoke(this, EventArgs.Empty);
+                IntentChanged?.Invoke(this, intent);
             }
             catch
             {

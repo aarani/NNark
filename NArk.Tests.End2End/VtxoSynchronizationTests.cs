@@ -22,7 +22,7 @@ public class VtxoSynchronizationTests
     {
         var builder = await DistributedApplicationTestingBuilder
             .CreateAsync<Projects.NArk_AppHost>(
-                args: [],
+                args: ["--noswap"],
                 configureBuilder: (appOptions, _) => { appOptions.AllowUnsecuredTransport = true; }
             );
 
@@ -56,7 +56,7 @@ public class VtxoSynchronizationTests
         // Create a new wallet
         var inMemoryWalletStorage = new InMemoryWalletStorage();
         var contracts = new InMemoryContractStorage();
-        var wallet = new SimpleSeedWallet(network, inMemoryWalletStorage);
+        var wallet = new SimpleSeedWallet(clientTransport, inMemoryWalletStorage);
         await wallet.CreateNewWallet("wallet1");
 
         // Start vtxo synchronization service
@@ -66,7 +66,7 @@ public class VtxoSynchronizationTests
             contracts,
             clientTransport
         );
-        await vtxoSync.Start();
+        await vtxoSync.StartAsync(CancellationToken.None);
 
         var contractService = new ContractService(wallet, contracts, clientTransport);
 
@@ -119,7 +119,7 @@ public class VtxoSynchronizationTests
 
         var vtxoStorage = GetMockVtxoStorageWithImpl();
 
-        var wallet = new SimpleSeedWallet(network, inMemoryWalletStorage);
+        var wallet = new SimpleSeedWallet(clientTransport, inMemoryWalletStorage);
         await wallet.CreateNewWallet("wallet1");
         await wallet.CreateNewWallet("wallet2");
 
@@ -132,7 +132,7 @@ public class VtxoSynchronizationTests
             contracts,
             clientTransport
         );
-        await vtxoSync.Start();
+        await vtxoSync.StartAsync(CancellationToken.None);
 
         var contract = await contractService.DerivePaymentContract("wallet1");
         var wallet1Address = contract.GetArkAddress();
@@ -167,7 +167,7 @@ public class VtxoSynchronizationTests
 
         vtxoStorage.ClearReceivedCalls();
         var spendingService = new SpendingService(vtxoStorage, contracts,
-            new SigningService(wallet, contracts, network), contractService, clientTransport);
+            new SigningService(wallet, contracts, clientTransport), contractService, clientTransport);
 
         await spendingService.Spend("wallet1",
         [

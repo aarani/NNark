@@ -4,7 +4,7 @@ namespace NArk.Abstractions.Intents;
 
 public interface IIntentStorage
 {
-    public event EventHandler? IntentChanged;
+    public event EventHandler<ArkIntent>? IntentChanged;
 
     public Task SaveIntent(string walletId, ArkIntent intent, CancellationToken cancellationToken = default);
     public Task<IReadOnlyCollection<ArkIntent>> GetIntents(string walletId, CancellationToken cancellationToken = default);

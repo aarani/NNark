@@ -3,8 +3,11 @@ using Aspire.Hosting;
 using BTCPayServer.Lightning;
 using CliWrap;
 using CliWrap.Buffered;
+using Microsoft.Extensions.Options;
 using NArk.Contracts;
 using NArk.Services;
+using NArk.Swaps.Boltz.Client;
+using NArk.Swaps.Boltz.Models;
 using NArk.Swaps.Models;
 using NArk.Swaps.Services;
 using NArk.Transport;
@@ -33,7 +36,7 @@ public class SwapManagementServiceTests
         // Create a new wallet
         var inMemoryWalletStorage = new InMemoryWalletStorage();
         var contracts = new InMemoryContractStorage();
-        var wallet = new SimpleSeedWallet(network, inMemoryWalletStorage);
+        var wallet = new SimpleSeedWallet(clientTransport, inMemoryWalletStorage);
         await wallet.CreateNewWallet("wallet1");
 
         // Start vtxo synchronization service
@@ -43,7 +46,7 @@ public class SwapManagementServiceTests
             contracts,
             clientTransport
         );
-        await vtxoSync.Start();
+        await vtxoSync.StartAsync(CancellationToken.None);
 
         var contractService = new ContractService(wallet, contracts, clientTransport);
 
@@ -102,16 +105,17 @@ public class SwapManagementServiceTests
         var boltzWs = _app.GetEndpoint("boltz", "ws");
         var testingPrerequisite = await GetFundedWallet();
         var swapStorage = new InMemorySwapStorage();
+        var boltzClient = new BoltzClient(new HttpClient(),
+            new OptionsWrapper<BoltzClientOptions>(new BoltzClientOptions()
+                { BoltzUrl = boltzApi.ToString(), WebsocketUrl = boltzWs.ToString() }));
         await using (var swapMgr = new SwapsManagementService(
-                         boltzApi,
-                         boltzWs,
                          new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
                              new SigningService(testingPrerequisite.wallet, testingPrerequisite.contracts,
-                                 Network.RegTest),
+                                 testingPrerequisite.clientTransport),
                              testingPrerequisite.contractService, testingPrerequisite.clientTransport),
                          testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
                          testingPrerequisite.wallet,
-                         swapStorage, testingPrerequisite.contractService))
+                         swapStorage, testingPrerequisite.contractService, boltzClient))
         {
             await swapMgr.StartAsync(CancellationToken.None);
             await swapMgr.InitiateSubmarineSwap(
@@ -137,16 +141,17 @@ public class SwapManagementServiceTests
         var boltzWs = _app.GetEndpoint("boltz", "ws");
         var testingPrerequisite = await GetFundedWallet();
         var swapStorage = new InMemorySwapStorage();
+        var boltzClient = new BoltzClient(new HttpClient(),
+            new OptionsWrapper<BoltzClientOptions>(new BoltzClientOptions()
+                { BoltzUrl = boltzApi.ToString(), WebsocketUrl = boltzWs.ToString() }));
         await using (var swapMgr = new SwapsManagementService(
-             boltzApi,
-             boltzWs,
              new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
                  new SigningService(testingPrerequisite.wallet, testingPrerequisite.contracts,
-                     Network.RegTest),
+                      testingPrerequisite.clientTransport),
                  testingPrerequisite.contractService, testingPrerequisite.clientTransport),
              testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
              testingPrerequisite.wallet,
-             swapStorage, testingPrerequisite.contractService))
+             swapStorage, testingPrerequisite.contractService, boltzClient))
         {
             await swapMgr.StartAsync(CancellationToken.None);
             var invoice = (await _app.ResourceCommands.ExecuteCommandAsync("lnd", "create-invoice"))

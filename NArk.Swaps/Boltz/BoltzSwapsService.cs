@@ -14,14 +14,14 @@ using NBitcoin.DataEncoders;
 using NBitcoin.Scripting;
 
 namespace NArk.Swaps.Boltz;
-internal class BoltzSwapService(
-    BoltzClient boltzClient,
-    IClientTransport clientTransport)
+
+internal class BoltzSwapService(BoltzClient boltzClient, IClientTransport clientTransport)
 {
     private static Sequence ParseSequence(long val)
     {
         return val >= 512 ? new Sequence(TimeSpan.FromSeconds(val)) : new Sequence((int)val);
     }
+
     public async Task<SubmarineSwapResult> CreateSubmarineSwap(BOLT11PaymentRequest invoice, OutputDescriptor sender,
         CancellationToken cancellationToken = default)
     {
@@ -32,7 +32,8 @@ internal class BoltzSwapService(
         var response = await boltzClient.CreateSubmarineSwapAsync(new SubmarineRequest()
         {
             Invoice = invoice.ToString(),
-            RefundPublicKey = Convert.ToHexStringLower(extractedSender.PubKey?.ToBytes() ?? extractedSender.XOnlyPubKey.ToBytes()),
+            RefundPublicKey =
+                Convert.ToHexStringLower(extractedSender.PubKey?.ToBytes() ?? extractedSender.XOnlyPubKey.ToBytes()),
             From = "ARK",
             To = "BTC",
         }, cancellationToken);
@@ -57,7 +58,8 @@ internal class BoltzSwapService(
 
         var address = vhtlcContract.GetArkAddress();
         if (response.Address != address.ToString(operatorTerms.Network.ChainName == ChainName.Mainnet))
-            throw new Exception($"Address mismatch! Expected {address.ToString(operatorTerms.Network.ChainName == ChainName.Mainnet)} got {response.Address}");
+            throw new Exception(
+                $"Address mismatch! Expected {address.ToString(operatorTerms.Network.ChainName == ChainName.Mainnet)} got {response.Address}");
 
         return new SubmarineSwapResult(vhtlcContract, response, address);
     }
@@ -82,13 +84,14 @@ internal class BoltzSwapService(
             From = "BTC",
             To = "ARK",
             OnchainAmount = createInvoiceRequest.Amount.MilliSatoshi / 1000,
-            ClaimPublicKey = Convert.ToHexStringLower(extractedReceiver.PubKey?.ToBytes() ?? extractedReceiver.XOnlyPubKey.ToBytes()), // Receiver will claim the VTXO
+            ClaimPublicKey =
+                Convert.ToHexStringLower(extractedReceiver.PubKey?.ToBytes() ??
+                                         extractedReceiver.XOnlyPubKey.ToBytes()), // Receiver will claim the VTXO
             PreimageHash = Encoders.Hex.EncodeData(preimageHash),
             AcceptZeroConf = true,
             DescriptionHash = createInvoiceRequest.DescriptionHash?.ToString(),
             Description = createInvoiceRequest.Description,
             InvoiceExpirySeconds = Convert.ToInt32(createInvoiceRequest.Expiry.TotalSeconds),
-
         };
 
         var response = await boltzClient.CreateReverseSwapAsync(request, cancellationToken);
@@ -115,7 +118,8 @@ internal class BoltzSwapService(
         var onchainAmountSats = createInvoiceRequest.Amount.ToUnit(LightMoneyUnit.Satoshi);
         if (invoiceAmountSats <= onchainAmountSats)
         {
-            throw new InvalidOperationException($"Invoice amount ({invoiceAmountSats} sats) must be greater than onchain amount ({onchainAmountSats} sats) to cover swap fees");
+            throw new InvalidOperationException(
+                $"Invoice amount ({invoiceAmountSats} sats) must be greater than onchain amount ({onchainAmountSats} sats) to cover swap fees");
         }
 
         var swapFee = invoiceAmountSats - onchainAmountSats;

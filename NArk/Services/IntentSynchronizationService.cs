@@ -27,7 +27,7 @@ public class IntentSynchronizationService(
     {
         await foreach (var _ in _submitTriggerChannel.Reader.ReadAllAsync(token))
         {
-            var intentsToSubmit = await intentStorage.GetUnsubmittedIntents();
+            var intentsToSubmit = await intentStorage.GetUnsubmittedIntents(token);
             foreach (var intentToSubmit in intentsToSubmit)
             {
                 await SubmitIntent(intentToSubmit);
