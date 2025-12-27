@@ -70,7 +70,7 @@ public class VtxoSynchronizationService : IAsyncDisposable
             HashSet<string> newViewOfScripts = [];
             foreach (var wallet in wallets)
             {
-                var contracts = await _contractStorage.LoadAllContracts(wallet.WalletIdentifier);
+                var contracts = await _contractStorage.LoadAllContracts(wallet.WalletIdentifier, token);
                 newViewOfScripts.UnionWith(contracts.Select(c => c.Script));
             }
 

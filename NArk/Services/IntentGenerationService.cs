@@ -39,10 +39,10 @@ public class IntentGenerationService(
         {
             while (!token.IsCancellationRequested)
             {
-                var wallets = (await walletStorage.LoadAllWallets()).Select(w => w.WalletIdentifier).ToArray();
+                var wallets = (await walletStorage.LoadAllWallets(token)).Select(w => w.WalletIdentifier).ToArray();
 
                 var activeContractsByWallets =
-                    (await contractStorage.LoadActiveContracts(wallets))
+                    (await contractStorage.LoadActiveContracts(wallets, token))
                     .GroupBy(c => c.WalletIdentifier);
 
                 foreach (var activeContractsByWallet in activeContractsByWallets)
@@ -53,14 +53,13 @@ public class IntentGenerationService(
 
                     var unspentVtxos =
                         await vtxoStorage.GetVtxosByScripts(
-                            [.. activeContractsByScript.Keys]
-                        );
+                            [.. activeContractsByScript.Keys], cancellationToken: token);
 
                     Dictionary<ArkCoinLite, ArkPsbtSigner> signers = [];
 
                     foreach (var vtxo in unspentVtxos)
                     {
-                        var signer = await signingService.GetVtxoPsbtSignerByContract(activeContractsByScript[vtxo.Script], vtxo);
+                        var signer = await signingService.GetVtxoPsbtSignerByContract(activeContractsByScript[vtxo.Script], vtxo, token);
                         signers.Add(signer.Coin.ToLite(), signer);
                     }
 
