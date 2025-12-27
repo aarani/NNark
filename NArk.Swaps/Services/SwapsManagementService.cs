@@ -23,6 +23,7 @@ namespace NArk.Swaps.Services;
 
 public class SwapsManagementService : IAsyncDisposable
 {
+    private readonly Uri? _websocketUrl;
     private readonly SpendingService _spendingService;
     private readonly IClientTransport _clientTransport;
     private readonly IVtxoStorage _vtxoStorage;
@@ -44,7 +45,8 @@ public class SwapsManagementService : IAsyncDisposable
     private readonly TransactionHelpers.ArkTransactionBuilder _transactionBuilder;
 
     public SwapsManagementService(
-        string boltzUrl,
+        Uri boltzUrl,
+        Uri? websocketUrl,
         SpendingService spendingService,
         IClientTransport clientTransport,
         IVtxoStorage vtxoStorage,
@@ -52,13 +54,14 @@ public class SwapsManagementService : IAsyncDisposable
         ISwapStorage swapsStorage,
         IContractService contractService)
     {
+        _websocketUrl = websocketUrl;
         _spendingService = spendingService;
         _clientTransport = clientTransport;
         _vtxoStorage = vtxoStorage;
         _wallet = wallet;
         _swapsStorage = swapsStorage;
         _contractService = contractService;
-        _boltzClient = new BoltzClient(new HttpClient { BaseAddress = new Uri(boltzUrl) });
+        _boltzClient = new BoltzClient(new HttpClient { BaseAddress = boltzUrl });
         _boltzService = new BoltzSwapService(
             _boltzClient,
             clientTransport
@@ -88,7 +91,7 @@ public class SwapsManagementService : IAsyncDisposable
         {
             if (eventDetails.StartsWith("id:"))
             {
-                await PollSwapState([eventDetails[2..]], cancellationToken);
+                await PollSwapState([eventDetails[3..]], cancellationToken);
             }
 
             var swaps =
@@ -247,7 +250,7 @@ public class SwapsManagementService : IAsyncDisposable
     {
         return status switch
         {
-            "swap.created" => ArkSwapStatus.Pending,
+            "swap.created" or "invoice.set" => ArkSwapStatus.Pending,
             "invoice.expired" or "swap.expired" or "transaction.failed" or "transaction.refunded" =>
                 ArkSwapStatus.Failed,
             "transaction.mempool" => ArkSwapStatus.Pending,
@@ -259,7 +262,7 @@ public class SwapsManagementService : IAsyncDisposable
 
     private async Task DoStatusCheck(HashSet<string> swapsIds, CancellationToken cancellationToken)
     {
-        await using var websocketClient = new BoltzWebsocketClient(_boltzClient.DeriveWebSocketUri());
+        await using var websocketClient = new BoltzWebsocketClient(_boltzClient.DeriveWebSocketUri(_websocketUrl));
         websocketClient.OnAnyEventReceived += OnSwapEventReceived;
         try
         {

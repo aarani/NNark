@@ -343,6 +343,24 @@ tlsextradomain=lnd")
         .WithVolume("nark-lnd", "/root/.lnd")
         .WithEndpoint(9735, 9735, protocol: ProtocolType.Tcp, name: "p2p")
         .WithEndpoint(10009, 10009, protocol: ProtocolType.Tcp, name: "rpc")
+        .WithCommand("create-invoice", "Create an invoice", async context =>
+        {
+            var createInvoiceResponse = await Cli.Wrap("docker")
+                .WithArguments(["exec", "lnd", "lncli", "--network=regtest", "addinvoice", "--amt", "10000"])
+                .ExecuteBufferedAsync(context.CancellationToken);
+            var invoice =
+            (
+                JsonSerializer.Deserialize<JsonObject>(createInvoiceResponse.StandardOutput)?["payment_request"]?.GetValue<string>()
+                ?? throw new InvalidOperationException("Invoice creation on LND failed")
+            ).Trim();
+
+            return new ExecuteCommandResult() { Success = true, ErrorMessage = invoice };
+        })
+        .WithCommand("shutdown", "Shutdown", async context =>
+        {
+            await Cli.Wrap("docker").WithArguments($"stop {context.ResourceName}").ExecuteBufferedAsync();
+            return new ExecuteCommandResult() { Success = true };
+        })
         .OnResourceReady(CreateLnd2LndChannel)
         .WaitFor(bitcoin)
         .WaitFor(nbxplorer)
@@ -409,27 +427,46 @@ var boltzFulmine =
 
 async Task UnlockAndFundFulmine(ContainerResource resource, ResourceReadyEvent @event, CancellationToken cancellationToken)
 {
+    await Task.Delay(TimeSpan.FromSeconds(20), cancellationToken);
+
     var fulmineEndpoint =
         await resource.GetEndpoint("api", null!).GetValueAsync(cancellationToken);
-    var httpClient = new HttpClient() { BaseAddress = new Uri(fulmineEndpoint!) };
+    var fulmineHttpClient = new HttpClient() { BaseAddress = new Uri(fulmineEndpoint!) };
 
     var genSeedResponse =
-        await httpClient.GetFromJsonAsync<JsonObject>($"/api/v1/wallet/genseed", cancellationToken: cancellationToken);
+        await fulmineHttpClient.GetFromJsonAsync<JsonObject>($"/api/v1/wallet/genseed", cancellationToken: cancellationToken);
     var privateKey = genSeedResponse?["nsec"]?.GetValue<string>() ?? throw new InvalidOperationException("Fulmine's GenSeed didn't work properly.");
 
-    await httpClient.PostAsJsonAsync("/api/v1/wallet/create", new
+    await fulmineHttpClient.PostAsJsonAsync("/api/v1/wallet/create", new
     {
         private_key = privateKey,
         password = "password",
         server_url = "http://ark:7070"
     }, cancellationToken: cancellationToken);
 
-    await httpClient.PostAsJsonAsync("/api/v1/wallet/unlock", new
+    await fulmineHttpClient.PostAsJsonAsync("/api/v1/wallet/unlock", new
     {
         password = "password"
     }, cancellationToken: cancellationToken);
 
-    //TODO: fund fulmine
+    var fulmineAddressResponse = await fulmineHttpClient.GetFromJsonAsync<JsonObject>("/api/v1/address", cancellationToken);
+    var address =
+        (fulmineAddressResponse?["address"] ?? throw new InvalidOperationException("Reading fulmine address failed."))
+        .GetValue<string>()
+        .Trim();
+    var onchainAdress = new Uri(address).AbsolutePath;
+
+    var chopsticksEndpoint = await chopsticks.GetEndpoint("http", null!).GetValueAsync(cancellationToken);
+    await new HttpClient().PostAsJsonAsync($"{chopsticksEndpoint}/faucet", new
+    {
+        amount = 1,
+        address = onchainAdress
+    }, cancellationToken: cancellationToken);
+
+    await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+
+    await fulmineHttpClient.GetAsync("/api/v1/settle", cancellationToken);
+    await fulmineHttpClient.GetAsync("/api/v1/transactions", cancellationToken);
 }
 
 var boltz =
@@ -438,13 +475,18 @@ var boltz =
         .WithContainerName("boltz")
         .WithContainerNetworkAlias("boltz")
         .WithEndpoint(9000, 9000, protocol: ProtocolType.Tcp, name: "grpc")
-        .WithEndpoint(9001, 9001, protocol: ProtocolType.Tcp, name: "api")
-        .WithEndpoint(9004, 9004, protocol: ProtocolType.Tcp, name: "ws")
+        .WithHttpEndpoint(9001, 9001, name: "api")
+        .WithHttpEndpoint(9004, 9004, name: "ws")
         .WithEnvironment("BOLTZ_CONFIG", @"loglevel = ""debug""
 network = ""regtest""
 [ark]
 host = ""boltz-fulmine""
 port = 7000
+useLocktimeSeconds = true
+[ark.unilateralDelays]
+claim = 444 # 3d.2h in blocks
+refund = 444 # 3d.2h in blocks
+refundWithoutReceiver = 720 # 5d in blocks
 
 [api]
 host = ""0.0.0.0""
