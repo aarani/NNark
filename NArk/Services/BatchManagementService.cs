@@ -334,9 +334,8 @@ public class BatchManagementService(
                 {
                     allWalletCoins.Add(
                         await signingService.GetPsbtSigner(
-                            await vtxoStorage.GetVtxoByOutPoint(outpoint) ??
-                            throw new InvalidOperationException("Unknown vtxo outpoint")
-                        )
+                            await vtxoStorage.GetVtxoByOutPoint(outpoint, cancellationToken) ??
+                            throw new InvalidOperationException("Unknown vtxo outpoint"), cancellationToken)
                     );
                 }
 

@@ -207,8 +207,8 @@ public class VtxoSynchronizationTests
             )
             .ReturnsForAnyArgs(c =>
                 vtxoStorageImpl.GetVtxosByScripts(c.Arg<IReadOnlyCollection<string>>(), c.Arg<bool>()));
-        vtxoStorage.GetVtxoByOutPoint(Arg.Any<OutPoint>())
-            .ReturnsForAnyArgs(c => vtxoStorageImpl.GetVtxoByOutPoint(c.Arg<OutPoint>()));
+        vtxoStorage.GetVtxoByOutPoint(Arg.Any<OutPoint>(), Arg.Any<CancellationToken>())
+            .ReturnsForAnyArgs(c => vtxoStorageImpl.GetVtxoByOutPoint(c.Arg<OutPoint>(), c.Arg<CancellationToken>()));
         vtxoStorage.SaveVtxo(Arg.Any<ArkVtxo>()).ReturnsForAnyArgs(c => vtxoStorageImpl.SaveVtxo(c.Arg<ArkVtxo>()));
 
         return vtxoStorage;
