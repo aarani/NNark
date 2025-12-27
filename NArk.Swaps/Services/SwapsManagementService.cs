@@ -118,7 +118,14 @@ public class SwapsManagementService : IAsyncDisposable
             var swapStatus = await _boltzClient.GetSwapStatusAsync(idToPoll, _shutdownCts.Token);
             var swap = await _swapsStorage.GetSwap(idToPoll, cancellationToken);
             var newStatus = Map(swapStatus?.Status ?? "Unknown");
-            if (swap.Status != newStatus)
+
+            if (newStatus is ArkSwapStatus.Failed && swapStatus?.Status is not null && IsRefundableStatus(swapStatus.Status))
+            {
+                var newSwap =
+                    swap with { Status = newStatus, UpdatedAt = DateTimeOffset.Now };
+                await RequestRefund(newSwap);
+            }
+            else if (swap.Status != newStatus)
             {
                 var newSwap =
                     swap with { Status = newStatus, UpdatedAt = DateTimeOffset.Now };
@@ -126,11 +133,6 @@ public class SwapsManagementService : IAsyncDisposable
                 await _swapsStorage.SaveSwap(swap.WalletId,
                     newSwap,
                     true, cancellationToken: cancellationToken);
-
-                if (newStatus is ArkSwapStatus.Failed && swapStatus?.Status is not null && IsRefundableStatus(swapStatus.Status))
-                {
-                    await RequestRefund(newSwap);
-                }
             }
         }
     }
@@ -159,7 +161,7 @@ public class SwapsManagementService : IAsyncDisposable
         var signingEntity = await _wallet.FindSigningEntity(contract.Sender, CancellationToken.None);
 
         // Get VTXOs for this contract
-        var vtxos = await _vtxoStorage.GetVtxosByScripts([swap.ContractScript], false, CancellationToken.None);
+        var vtxos = await _vtxoStorage.GetVtxosByScripts([contract.GetArkAddress().ScriptPubKey.ToHex()], false, CancellationToken.None);
         if (vtxos.Count == 0)
         {
             // logger.LogWarning("No VTXOs found for submarine swap {SwapId} refund", swap.SwapId);
@@ -169,6 +171,9 @@ public class SwapsManagementService : IAsyncDisposable
         // Use the first VTXO (should only be one for a swap)
         var vtxo = vtxos.Single();
 
+        if (vtxo.Recoverable)
+            throw new NotImplementedException("Recoverable scnerio is not implemented");
+
         // Get the user's wallet address for refund destination
         var refundAddress =
             await _contractService.DerivePaymentContract(swap.WalletId, CancellationToken.None);
@@ -177,52 +182,21 @@ public class SwapsManagementService : IAsyncDisposable
             throw new InvalidOperationException("Failed to get refund address");
         }
 
-        // Build the refund transaction
-        var refundTxBuilder = serverInfo.Network.CreateTransactionBuilder();
-        refundTxBuilder.SetVersion(3);
-        refundTxBuilder.SetFeeWeight(0);
-        refundTxBuilder.DustPrevention = false;
-
         var arkCoin = contract.ToCoopRefundCoin(swap.WalletId, vtxo);
-
-        // Add the VTXO as input
-        refundTxBuilder.AddCoin(arkCoin);
-
-        // Send full amount back to user (minus any fees handled by Ark)
-        refundTxBuilder.Send(refundAddress.GetArkAddress(), Money.Satoshis(vtxo.Amount));
-
-        var refundPsbt = refundTxBuilder.BuildPSBT(false, PSBTVersion.PSBTv0);
 
         var signer = new ArkPsbtSigner(arkCoin, signingEntity);
 
-        var refundGtx = refundPsbt.GetGlobalTransaction();
-        var refundPrecomputedTransactionData =
-            refundGtx.PrecomputeTransactionData([signer.Coin.TxOut]);
+        var (arkTx, checkpoints) =
+            await _transactionBuilder.ConstructArkTransaction([signer], [new ArkTxOut(ArkTxOutType.Vtxo, arkCoin.Amount, refundAddress.GetArkAddress())],
+                serverInfo, CancellationToken.None);
 
-        // Sign our part of the refund transaction
-        await signer.SignAndFillPsbt(refundPsbt, refundPrecomputedTransactionData, CancellationToken.None);
-
-        // Build checkpoint transaction (required for Ark protocol)
-        var checkpointScript = serverInfo.CheckpointTapScript;
-        var checkpointTxBuilder = serverInfo.Network.CreateTransactionBuilder();
-        checkpointTxBuilder.SetVersion(3);
-        checkpointTxBuilder.AddCoin(arkCoin);
-        checkpointTxBuilder.Send(refundAddress.GetArkAddress(), Money.Satoshis(vtxo.Amount));
-        var checkpointPsbt = checkpointTxBuilder.BuildPSBT(false, PSBTVersion.PSBTv0);
-        checkpointPsbt.Inputs[0].WitnessUtxo = signer.Coin.TxOut;
-
-        var checkpointGtx = checkpointPsbt.GetGlobalTransaction();
-        var checkpointPrecomputedTransactionData =
-            checkpointGtx.PrecomputeTransactionData([signer.Coin.TxOut]);
-
-        // Sign checkpoint
-        await signer.SignAndFillPsbt(checkpointPsbt, checkpointPrecomputedTransactionData);
+        var checkpoint = checkpoints.Single();
 
         // Request Boltz to co-sign the refund
         var refundRequest = new SubmarineRefundRequest
         {
-            Transaction = checkpointPsbt.ToBase64(),
-            Checkpoint = checkpointPsbt.ToBase64()
+            Transaction = arkTx.ToBase64(),
+            Checkpoint = checkpoint.Psbt.ToBase64()
         };
 
         var refundResponse = await _boltzClient.RefundSubmarineSwapAsync(swap.SwapId, refundRequest, CancellationToken.None);
@@ -232,10 +206,10 @@ public class SwapsManagementService : IAsyncDisposable
         var boltzSignedCheckpointPsbt = PSBT.Parse(refundResponse.Checkpoint, serverInfo.Network);
 
         // Combine signatures
-        refundPsbt.UpdateFrom(boltzSignedRefundPsbt);
-        checkpointPsbt.UpdateFrom(boltzSignedCheckpointPsbt);
+        arkTx.UpdateFrom(boltzSignedRefundPsbt);
+        checkpoint.Psbt.UpdateFrom(boltzSignedCheckpointPsbt);
 
-        await _transactionBuilder.SubmitArkTransaction([signer], refundPsbt, [new IndexedPSBT(checkpointPsbt, 0)],
+        await _transactionBuilder.SubmitArkTransaction([signer], arkTx, [checkpoint],
             CancellationToken.None);
 
         var newSwap =
@@ -251,7 +225,7 @@ public class SwapsManagementService : IAsyncDisposable
         return status switch
         {
             "swap.created" or "invoice.set" => ArkSwapStatus.Pending,
-            "invoice.expired" or "swap.expired" or "transaction.failed" or "transaction.refunded" =>
+            "invoice.failedToPay" or "invoice.expired" or "swap.expired" or "transaction.failed" or "transaction.refunded" =>
                 ArkSwapStatus.Failed,
             "transaction.mempool" => ArkSwapStatus.Pending,
             "transaction.confirmed" or "invoice.settled" => ArkSwapStatus.Settled,
@@ -302,9 +276,10 @@ public class SwapsManagementService : IAsyncDisposable
     }
 
 
-    public async Task<uint256> InitiateSubmarineSwap(string walletId, BOLT11PaymentRequest invoice,
+    public async Task<string> InitiateSubmarineSwap(string walletId, BOLT11PaymentRequest invoice, bool autoPay = true,
         CancellationToken cancellationToken = default)
     {
+        var serverInfo = await _clientTransport.GetServerInfoAsync(cancellationToken);
         var refundEntity = await _wallet.GetNewSigningEntity(walletId, cancellationToken);
         var swap = await _boltzService.CreateSubmarineSwap(invoice,
             await refundEntity.GetOutputDescriptor(cancellationToken),
@@ -318,6 +293,7 @@ public class SwapsManagementService : IAsyncDisposable
                 invoice.ToString(),
                 swap.Swap.ExpectedAmount,
                 swap.Contract.ToString(),
+                swap.Address.ToString(serverInfo.Network.ChainName == ChainName.Mainnet),
                 ArkSwapStatus.Pending,
                 null,
                 DateTimeOffset.UtcNow,
@@ -327,8 +303,11 @@ public class SwapsManagementService : IAsyncDisposable
         try
         {
             await _contractService.ImportContract(walletId, swap.Contract, cancellationToken);
-            return await _spendingService.Spend(walletId,
-                [new ArkTxOut(ArkTxOutType.Vtxo, swap.Swap.ExpectedAmount, swap.Address)], cancellationToken);
+            return autoPay
+                ? (await _spendingService.Spend(walletId,
+                    [new ArkTxOut(ArkTxOutType.Vtxo, swap.Swap.ExpectedAmount, swap.Address)], cancellationToken))
+                    .ToString()
+                : swap.Swap.Id;
         }
         catch (Exception e)
         {
@@ -341,6 +320,7 @@ public class SwapsManagementService : IAsyncDisposable
                     invoice.ToString(),
                     swap.Swap.ExpectedAmount,
                     swap.Contract.ToString(),
+                    swap.Address.ToString(serverInfo.Network.ChainName == ChainName.Mainnet),
                     ArkSwapStatus.Failed,
                     e.ToString(),
                     DateTimeOffset.UtcNow,
@@ -351,6 +331,27 @@ public class SwapsManagementService : IAsyncDisposable
         }
     }
 
+    public async Task<uint256> PayExistingSubmarineSwap(string walletId, string swapId, CancellationToken cancellationToken = default)
+    {
+        var swap = await _swapsStorage.GetSwap(swapId, cancellationToken);
+        try
+        {
+            return await _spendingService.Spend(walletId,
+                [new ArkTxOut(ArkTxOutType.Vtxo, swap.ExpectedAmount, ArkAddress.Parse(swap.Address))], cancellationToken);
+        }
+        catch (Exception e)
+        {
+            await _swapsStorage.SaveSwap(
+                walletId,
+                swap with
+                {
+                    Status = ArkSwapStatus.Failed,
+                    FailReason = e.ToString(),
+                    UpdatedAt = DateTimeOffset.UtcNow
+                }, false, cancellationToken);
+            throw;
+        }
+    }
     private void OnVtxosChanged(object? sender, EventArgs e)
     {
     }

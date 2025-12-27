@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Text.Json;
@@ -346,7 +347,7 @@ tlsextradomain=lnd")
         .WithCommand("create-invoice", "Create an invoice", async context =>
         {
             var createInvoiceResponse = await Cli.Wrap("docker")
-                .WithArguments(["exec", "lnd", "lncli", "--network=regtest", "addinvoice", "--amt", "10000"])
+                .WithArguments(["exec", "lnd", "lncli", "--network=regtest", "addinvoice", "--amt", "10000", "--expiry", TimeSpan.FromSeconds(30).TotalSeconds.ToString(CultureInfo.InvariantCulture)])
                 .ExecuteBufferedAsync(context.CancellationToken);
             var invoice =
             (
@@ -454,13 +455,13 @@ async Task UnlockAndFundFulmine(ContainerResource resource, ResourceReadyEvent @
         (fulmineAddressResponse?["address"] ?? throw new InvalidOperationException("Reading fulmine address failed."))
         .GetValue<string>()
         .Trim();
-    var onchainAdress = new Uri(address).AbsolutePath;
+    var onchainAddress = new Uri(address).AbsolutePath;
 
     var chopsticksEndpoint = await chopsticks.GetEndpoint("http", null!).GetValueAsync(cancellationToken);
     await new HttpClient().PostAsJsonAsync($"{chopsticksEndpoint}/faucet", new
     {
         amount = 1,
-        address = onchainAdress
+        address = onchainAddress
     }, cancellationToken: cancellationToken);
 
     await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);

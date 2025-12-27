@@ -66,7 +66,7 @@ public class VtxoSynchronizationService : IAsyncDisposable
         await _viewSyncLock.WaitAsync(token);
         try
         {
-            var wallets = await _walletStorage.LoadAllWallets();
+            var wallets = await _walletStorage.LoadAllWallets(token);
             HashSet<string> newViewOfScripts = [];
             foreach (var wallet in wallets)
             {
@@ -74,7 +74,7 @@ public class VtxoSynchronizationService : IAsyncDisposable
                 newViewOfScripts.UnionWith(contracts.Select(c => c.Script));
             }
 
-            foreach (var vtxo in await _vtxoStorage.GetUnspentVtxos())
+            foreach (var vtxo in await _vtxoStorage.GetUnspentVtxos(token))
             {
                 newViewOfScripts.Add(vtxo.Script);
             }
@@ -139,7 +139,7 @@ public class VtxoSynchronizationService : IAsyncDisposable
             await foreach (var vtxo in _arkClientTransport.GetVtxoByScriptsAsSnapshot(pollBatch, cancellationToken))
             {
                 // Upsert
-                await _vtxoStorage.SaveVtxo(vtxo);
+                await _vtxoStorage.SaveVtxo(vtxo, cancellationToken);
             }
         }
     }

@@ -7,6 +7,7 @@ public record ArkSwap(
     string Invoice,
     long ExpectedAmount,
     string ContractScript,
+    string Address,
     ArkSwapStatus Status,
     string? FailReason,
     DateTimeOffset CreatedAt,

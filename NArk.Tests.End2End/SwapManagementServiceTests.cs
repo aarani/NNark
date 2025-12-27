@@ -72,7 +72,7 @@ public class SwapManagementServiceTests
 
     private DistributedApplication _app;
 
-    [OneTimeSetUp]
+    [SetUp]
     public async Task StartDependencies()
     {
         var builder = await DistributedApplicationTestingBuilder
@@ -87,7 +87,7 @@ public class SwapManagementServiceTests
         await _app.ResourceNotifications.WaitForResourceHealthyAsync("boltz", CancellationToken.None);
     }
 
-    [OneTimeTearDown]
+    [TearDown]
     public async Task StopDependencies()
     {
         await _app.StopAsync();
@@ -95,6 +95,7 @@ public class SwapManagementServiceTests
     }
 
     [Test]
+
     public async Task CanPayInvoiceWithArkUsingBoltz()
     {
         var boltzApi = _app.GetEndpoint("boltz", "api");
@@ -117,6 +118,7 @@ public class SwapManagementServiceTests
                 "wallet1",
                 BOLT11PaymentRequest.Parse((await _app.ResourceCommands.ExecuteCommandAsync("lnd", "create-invoice"))
                     .ErrorMessage!, Network.RegTest),
+                true,
                 CancellationToken.None
             );
 
@@ -124,6 +126,43 @@ public class SwapManagementServiceTests
         }
         Assert.That(
             (await swapStorage.GetActiveSwaps("wallet1")).Any(s => s.Status == ArkSwapStatus.Settled),
+            Is.True
+        );
+    }
+
+    [Test]
+    public async Task CanDoArkCoOpRefundUsingBoltz()
+    {
+        var boltzApi = _app.GetEndpoint("boltz", "api");
+        var boltzWs = _app.GetEndpoint("boltz", "ws");
+        var testingPrerequisite = await GetFundedWallet();
+        var swapStorage = new InMemorySwapStorage();
+        await using (var swapMgr = new SwapsManagementService(
+             boltzApi,
+             boltzWs,
+             new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
+                 new SigningService(testingPrerequisite.wallet, testingPrerequisite.contracts,
+                     Network.RegTest),
+                 testingPrerequisite.contractService, testingPrerequisite.clientTransport),
+             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
+             testingPrerequisite.wallet,
+             swapStorage, testingPrerequisite.contractService))
+        {
+            await swapMgr.StartAsync(CancellationToken.None);
+            var invoice = (await _app.ResourceCommands.ExecuteCommandAsync("lnd", "create-invoice"))
+                .ErrorMessage!;
+            var swapId = await swapMgr.InitiateSubmarineSwap(
+                "wallet1",
+                BOLT11PaymentRequest.Parse(invoice, Network.RegTest),
+                false,
+                CancellationToken.None
+            );
+            await Task.Delay(TimeSpan.FromSeconds(30));
+            await swapMgr.PayExistingSubmarineSwap("wallet1", swapId, CancellationToken.None);
+            await Task.Delay(TimeSpan.FromSeconds(45));
+        }
+        Assert.That(
+            (await swapStorage.GetActiveSwaps("wallet1")).Any(s => s.Status == ArkSwapStatus.Refunded),
             Is.True
         );
     }

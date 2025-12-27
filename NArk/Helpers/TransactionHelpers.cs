@@ -39,7 +39,7 @@ public static class TransactionHelpers
         /// <param name="serverInfo">Info retrieved from Ark operator</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>The Ark transaction and checkpoint transactions with their input witnesses</returns>
-        private async Task<(PSBT arkTx, SortedSet<IndexedPSBT> checkpoints)> ConstructArkTransaction(
+        public async Task<(PSBT arkTx, SortedSet<IndexedPSBT> checkpoints)> ConstructArkTransaction(
             IEnumerable<ArkPsbtSigner> coins,
             TxOut[] outputs,
             ArkServerInfo serverInfo,
