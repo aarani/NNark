@@ -365,6 +365,22 @@ tlsextradomain=lnd")
 
                 return new ExecuteCommandResult() { Success = true, ErrorMessage = invoice };
             })
+            .WithCommand("create-long-invoice", "Create invoice with long expiry", async context =>
+            {
+                var createInvoiceResponse = await Cli.Wrap("docker")
+                    .WithArguments([
+                        "exec", "lnd", "lncli", "--network=regtest", "addinvoice", "--amt", "10000"
+                    ])
+                    .ExecuteBufferedAsync(context.CancellationToken);
+                var invoice =
+                (
+                    JsonSerializer.Deserialize<JsonObject>(createInvoiceResponse.StandardOutput)?["payment_request"]
+                        ?.GetValue<string>()
+                    ?? throw new InvalidOperationException("Invoice creation on LND failed")
+                ).Trim();
+
+                return new ExecuteCommandResult() { Success = true, ErrorMessage = invoice };
+            })
             .WithCommand("shutdown", "Shutdown", async context =>
             {
                 await Cli.Wrap("docker").WithArguments($"stop {context.ResourceName}").ExecuteBufferedAsync();

@@ -70,7 +70,7 @@ public class SwapManagementServiceTests
         await swapMgr.StartAsync(CancellationToken.None);
         await swapMgr.InitiateSubmarineSwap(
             "wallet1",
-            BOLT11PaymentRequest.Parse((await _app.ResourceCommands.ExecuteCommandAsync("lnd", "create-invoice"))
+            BOLT11PaymentRequest.Parse((await _app.ResourceCommands.ExecuteCommandAsync("lnd", "create-long-invoice"))
                 .ErrorMessage!, Network.RegTest),
             true,
             CancellationToken.None
