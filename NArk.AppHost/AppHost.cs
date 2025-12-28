@@ -143,6 +143,8 @@ var ark =
 
 async Task StartArkResource(ContainerResource cr, ResourceReadyEvent @event, CancellationToken cancellationToken)
 {
+    await Task.Delay(TimeSpan.FromSeconds(5));
+
     var logger = @event.Services.GetRequiredService<ILogger<NArk_AppHost>>();
 
     var walletCreationProcess =
