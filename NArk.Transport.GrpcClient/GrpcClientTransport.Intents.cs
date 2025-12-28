@@ -18,9 +18,15 @@ public partial class GrpcClientTransport
                 }
             };
 
-            var response = await _serviceClient.RegisterIntentAsync(registerRequest, cancellationToken: cancellationToken);
+            var response =
+                await _serviceClient.RegisterIntentAsync(registerRequest, cancellationToken: cancellationToken);
 
             return response.IntentId;
+        }
+        catch (OperationCanceledException)
+        {
+            // ignored
+            return string.Empty;
         }
         catch (Exception ex) when (ex.Message.Contains("duplicated input"))
         {

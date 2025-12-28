@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using NArk.Abstractions.Wallets;
 
-namespace NArk.Tests.End2End;
+namespace NArk.Tests.End2End.TestPersistance;
 
 public class InMemoryWalletStorage : IWalletStorage
 {

@@ -6,6 +6,7 @@ using NArk.Abstractions;
 using NArk.Abstractions.VTXOs;
 using NArk.Contracts;
 using NArk.Services;
+using NArk.Tests.End2End.TestPersistance;
 using NArk.Transport.GrpcClient;
 using NArk.Wallets;
 using NBitcoin;
@@ -43,7 +44,6 @@ public class VtxoSynchronizationTests
     public async Task CanReceiveVtxosFromImportedContract()
     {
         var network = Network.RegTest;
-
         // Mock the VTXO storage so we can listen for new vtxos
         var vtxoStorage = Substitute.For<IVtxoStorage>();
         vtxoStorage.GetUnspentVtxos().ReturnsForAnyArgs([]);
@@ -107,8 +107,6 @@ public class VtxoSynchronizationTests
     [Test]
     public async Task CanSendAndReceiveBackVtxo()
     {
-        var network = Network.RegTest;
-
         // Receive arkd information
         var clientTransport = new GrpcClientTransport(_app.GetEndpoint("ark", "arkd").ToString());
         var info = await clientTransport.GetServerInfoAsync();

@@ -16,31 +16,45 @@ public class IntentSynchronizationService(
 
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
-        intentStorage.IntentChanged += (_, _) => _submitTriggerChannel.Writer.TryWrite("INTENT_CHANGED");
+        intentStorage.IntentChanged += OnIntentChanged;
         var multiToken = CancellationTokenSource.CreateLinkedTokenSource(_shutdownCts.Token, cancellationToken);
         _intentSubmitLoop = DoIntentSubmitLoop(multiToken.Token);
         _submitTriggerChannel.Writer.TryWrite("START");
         return Task.CompletedTask;
     }
 
+    private void OnIntentChanged(object? sender, ArkIntent intent)
+    {
+        _submitTriggerChannel.Writer.TryWrite("INTENT_CHANGED");
+    }
+
     private async Task DoIntentSubmitLoop(CancellationToken token)
     {
-        await foreach (var _ in _submitTriggerChannel.Reader.ReadAllAsync(token))
+        try
         {
-            var intentsToSubmit = await intentStorage.GetUnsubmittedIntents(token);
-            foreach (var intentToSubmit in intentsToSubmit)
+            await foreach (var _ in _submitTriggerChannel.Reader.ReadAllAsync(token))
             {
-                await SubmitIntent(intentToSubmit);
+                token.ThrowIfCancellationRequested();
+
+                var intentsToSubmit = await intentStorage.GetUnsubmittedIntents(token);
+                foreach (var intentToSubmit in intentsToSubmit)
+                {
+                    await SubmitIntent(intentToSubmit, token);
+                }
             }
+        }
+        catch (OperationCanceledException)
+        {
+
         }
     }
 
-    private async Task<string> SubmitIntent(ArkIntent intentToSubmit)
+    private async Task<string> SubmitIntent(ArkIntent intentToSubmit, CancellationToken token)
     {
         try
         {
             var intentId =
-                await clientTransport.RegisterIntent(intentToSubmit, _shutdownCts.Token);
+                await clientTransport.RegisterIntent(intentToSubmit, token);
 
             await intentStorage.SaveIntent(
                 intentToSubmit.WalletId,
@@ -49,17 +63,16 @@ public class IntentSynchronizationService(
                     IntentId = intentId,
                     State = ArkIntentState.WaitingForBatch,
                     UpdatedAt = DateTimeOffset.UtcNow
-                }
-            );
+                }, token);
 
             return intentId;
         }
         catch (AlreadyLockedVtxoException)
         {
-            await clientTransport.DeleteIntent(intentToSubmit, _shutdownCts.Token);
+            await clientTransport.DeleteIntent(intentToSubmit, token);
 
             var intentId =
-                await clientTransport.RegisterIntent(intentToSubmit, _shutdownCts.Token);
+                await clientTransport.RegisterIntent(intentToSubmit, token);
 
             await intentStorage.SaveIntent(
                 intentToSubmit.WalletId,
@@ -68,8 +81,7 @@ public class IntentSynchronizationService(
                     IntentId = intentId,
                     State = ArkIntentState.WaitingForBatch,
                     UpdatedAt = DateTimeOffset.UtcNow
-                }
-            );
+                }, token);
 
             return intentId;
         }
@@ -77,7 +89,10 @@ public class IntentSynchronizationService(
 
     public async ValueTask DisposeAsync()
     {
+        intentStorage.IntentChanged -= OnIntentChanged;
+
         await _shutdownCts.CancelAsync();
+
         try
         {
             if (_intentSubmitLoop is not null)

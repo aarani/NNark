@@ -1,7 +1,7 @@
 using NArk.Abstractions.Intents;
 using NBitcoin;
 
-namespace NArk.Tests.End2End;
+namespace NArk.Tests.End2End.TestPersistance;
 
 public class InMemoryIntentStorage : IIntentStorage
 {

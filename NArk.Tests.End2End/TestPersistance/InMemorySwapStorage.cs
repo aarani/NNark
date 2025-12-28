@@ -3,13 +3,13 @@ using NArk.Swaps.Abstractions;
 using NArk.Swaps.Models;
 using NBitcoin;
 
-namespace NArk.Tests.End2End;
+namespace NArk.Tests.End2End.TestPersistance;
 
 public class InMemorySwapStorage : ISwapStorage
 {
     private readonly ConcurrentDictionary<string, HashSet<ArkSwap>> _swaps = new();
 
-    public event EventHandler? SwapsChanged;
+    public event EventHandler<ArkSwap>? SwapsChanged;
     public Task SaveSwap(string walletId, ArkSwap swap, bool silent = false, CancellationToken cancellationToken = default)
     {
         lock (_swaps)
@@ -19,7 +19,7 @@ public class InMemorySwapStorage : ISwapStorage
             else
                 _swaps[walletId] = [swap];
             if (!silent)
-                SwapsChanged?.Invoke(this, EventArgs.Empty);
+                SwapsChanged?.Invoke(this, swap);
         }
 
         return Task.CompletedTask;

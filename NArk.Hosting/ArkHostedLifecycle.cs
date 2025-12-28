@@ -34,11 +34,11 @@ public class ArkHostedLifecycle(
 
     public Task StoppingAsync(CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        return Task.CompletedTask;
     }
 
     public Task StoppedAsync(CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        return Task.CompletedTask;
     }
 }

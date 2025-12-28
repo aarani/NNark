@@ -8,6 +8,7 @@ using NArk.Blockchain.NBXplorer;
 using NArk.Hosting;
 using NArk.Models.Options;
 using NArk.Services;
+using NArk.Tests.End2End.TestPersistance;
 using NArk.Wallets;
 using NBitcoin;
 
@@ -86,24 +87,15 @@ public class BuilderStyleTests
             ])
             .ExecuteBufferedAsync();
 
-        var weGotAnswerCts = new CancellationTokenSource();
+        var gotBatchTcs = new TaskCompletionSource();
 
         intentStorage.IntentChanged += (sender, intent) =>
         {
             if (intent.State == ArkIntentState.BatchSucceeded)
-                weGotAnswerCts.Cancel();
+                gotBatchTcs.TrySetResult();
         };
 
-        try
-        {
-            await Task.Delay(TimeSpan.FromMinutes(5), weGotAnswerCts.Token);
-        }
-        catch (OperationCanceledException) when (weGotAnswerCts.IsCancellationRequested)
-        {
-            Assert.Pass();
-        }
-
-        Assert.Fail("We did not make a successful batch in the last 5 minute");
+        await gotBatchTcs.Task.WaitAsync(TimeSpan.FromMinutes(1));
 
         await arkHost.StopAsync();
     }

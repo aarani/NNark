@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using NArk.Abstractions.VTXOs;
 using NBitcoin;
 
-namespace NArk.Tests.End2End;
+namespace NArk.Tests.End2End.TestPersistance;
 
 public class InMemoryVtxoStorage : IVtxoStorage
 {

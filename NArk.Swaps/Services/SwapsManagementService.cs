@@ -70,7 +70,7 @@ public class SwapsManagementService : IAsyncDisposable
         vtxoStorage.VtxosChanged += OnVtxosChanged;
     }
 
-    private void OnSwapsChanged(object? sender, EventArgs e)
+    private void OnSwapsChanged(object? sender, ArkSwap _)
     {
         _triggerChannel.Writer.TryWrite("");
     }

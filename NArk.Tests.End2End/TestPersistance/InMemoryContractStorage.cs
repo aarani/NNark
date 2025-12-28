@@ -1,6 +1,6 @@
 using NArk.Abstractions.Contracts;
 
-namespace NArk.Tests.End2End;
+namespace NArk.Tests.End2End.TestPersistance;
 
 public class InMemoryContractStorage : IContractStorage
 {
