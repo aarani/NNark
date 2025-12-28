@@ -57,7 +57,7 @@ internal static class FundedWalletHelper
         await contractService.ImportContract("wallet1", contract);
 
         // Pay a random amount to the contract address
-        var randomAmount = RandomNumberGenerator.GetInt32((int)info.Dust.Satoshi, 100000);
+        const int randomAmount = 500000;
         await Cli.Wrap("docker")
             .WithArguments([
                 "exec", "-t", "ark", "ark", "send", "--to", contract.GetArkAddress().ToString(false), "--amount",
