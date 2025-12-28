@@ -33,9 +33,9 @@ public class SwapManagementServiceTests
             await _app.ResourceNotifications.WaitForResourceHealthyAsync("boltz", CancellationToken.None);
             await Task.Delay(TimeSpan.FromSeconds(5)); //Boltz being boltz.... :(
         }
-        catch
+        catch (Exception e)
         {
-            Assert.Inconclusive("Boltz/Fulmine failed to initialize, test cannot be performed");
+            Assert.Inconclusive($"Boltz/Fulmine failed to initialize, test cannot be performed, error: {e}");
             throw;
         }
     }
