@@ -408,9 +408,15 @@ tlsextradomain=lnd")
             ?? throw new InvalidOperationException("Invoice creation on LND failed")
         ).Trim();
 
-        await Cli.Wrap("docker")
-            .WithArguments(["exec", "boltz-lnd", "lncli", "--network=regtest", "payinvoice", "--force", invoice])
-            .ExecuteBufferedAsync(cancellationToken);
+        var test =
+            await Cli.Wrap("docker")
+                .WithArguments(["exec", "boltz-lnd", "lncli", "--network=regtest", "payinvoice", "--force", invoice])
+                .WithValidation(CommandResultValidation.None)
+                .ExecuteBufferedAsync(cancellationToken);
+        Console.WriteLine(test.StandardOutput);
+        Console.WriteLine(test.StandardError);
+        if (!test.IsSuccess)
+            throw new InvalidOperationException($"LND pay invoice failed, stds: {test.StandardOutput}, {test.StandardError}");
     }
 
 

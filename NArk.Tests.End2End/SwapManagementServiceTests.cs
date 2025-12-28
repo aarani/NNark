@@ -16,7 +16,7 @@ public class SwapManagementServiceTests
 {
     private DistributedApplication _app;
 
-    [SetUp]
+    [OneTimeSetUp]
     public async Task StartDependencies()
     {
         try
@@ -40,7 +40,7 @@ public class SwapManagementServiceTests
         }
     }
 
-    [TearDown]
+    [OneTimeTearDown]
     public async Task StopDependencies()
     {
         await _app.StopAsync();
