@@ -389,34 +389,13 @@ tlsextradomain=lnd")
         await Cli.Wrap("docker")
             .WithArguments([
                 "exec", "boltz-lnd", "lncli", "--network=regtest", "openchannel", $"--node_key={counterpartyPubKey}",
-                "--connect=lnd:9735", "--local_amt=3000000", "--sat_per_vbyte=1", "--min_confs=0"
+                "--connect=lnd:9735", "--local_amt=2500000", "--sat_per_vbyte=1", "--min_confs=0", "--push_amt=500000"
             ])
             .ExecuteBufferedAsync(cancellationToken);
 
         await Cli.Wrap("docker")
             .WithArguments(["exec", "bitcoin", "bitcoin-cli", "-rpcwallet=", "-generate", "10"])
             .ExecuteBufferedAsync(cancellationToken);
-
-        var createInvoiceResponse = await Cli.Wrap("docker")
-            .WithArguments(["exec", "lnd", "lncli", "--network=regtest", "addinvoice", "--amt", "500000"])
-            .ExecuteBufferedAsync(cancellationToken);
-
-        var invoice =
-        (
-            JsonSerializer.Deserialize<JsonObject>(createInvoiceResponse.StandardOutput)?["payment_request"]
-                ?.GetValue<string>()
-            ?? throw new InvalidOperationException("Invoice creation on LND failed")
-        ).Trim();
-
-        var test =
-            await Cli.Wrap("docker")
-                .WithArguments(["exec", "boltz-lnd", "lncli", "--network=regtest", "payinvoice", "--force", invoice])
-                .WithValidation(CommandResultValidation.None)
-                .ExecuteBufferedAsync(cancellationToken);
-        Console.WriteLine(test.StandardOutput);
-        Console.WriteLine(test.StandardError);
-        if (!test.IsSuccess)
-            throw new InvalidOperationException($"LND pay invoice failed, stds: {test.StandardOutput}, {test.StandardError}");
     }
 
 
@@ -549,6 +528,7 @@ quote = ""BTC""
 rate = 1
 fee = 0
 swapInFee = 0.00
+invoiceExpiry = 361
 maxSwapAmount = 4294967
 minSwapAmount = 1000
 

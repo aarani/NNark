@@ -19,25 +19,17 @@ public class SwapManagementServiceTests
     [OneTimeSetUp]
     public async Task StartDependencies()
     {
-        try
-        {
-            var builder = await DistributedApplicationTestingBuilder
-                .CreateAsync<Projects.NArk_AppHost>(
-                    args: [],
-                    configureBuilder: (appOptions, _) => { appOptions.AllowUnsecuredTransport = true; }
-                );
+        var builder = await DistributedApplicationTestingBuilder
+            .CreateAsync<Projects.NArk_AppHost>(
+                args: [],
+                configureBuilder: (appOptions, _) => { appOptions.AllowUnsecuredTransport = true; }
+            );
 
-            // Start dependencies
-            _app = await builder.BuildAsync();
-            await _app.StartAsync(CancellationToken.None);
-            await _app.ResourceNotifications.WaitForResourceHealthyAsync("boltz", CancellationToken.None);
-            await Task.Delay(TimeSpan.FromSeconds(5)); //Boltz being boltz.... :(
-        }
-        catch (Exception e)
-        {
-            Assert.Inconclusive($"Boltz/Fulmine failed to initialize, test cannot be performed");
-            throw;
-        }
+        // Start dependencies
+        _app = await builder.BuildAsync();
+        await _app.StartAsync(CancellationToken.None);
+        await _app.ResourceNotifications.WaitForResourceHealthyAsync("boltz", CancellationToken.None);
+        await Task.Delay(TimeSpan.FromSeconds(5)); //Boltz being boltz.... :(
     }
 
     [OneTimeTearDown]
