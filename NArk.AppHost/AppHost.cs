@@ -288,7 +288,7 @@ restcors=*")
         var chopsticksEndpoint = await chopsticks.GetEndpoint("http", null!).GetValueAsync(cancellationToken);
         await new HttpClient().PostAsJsonAsync($"{chopsticksEndpoint}/faucet", new
         {
-            amount = 2,
+            amount = 4,
             address = address
         }, cancellationToken: cancellationToken);
 
@@ -389,7 +389,7 @@ tlsextradomain=lnd")
         await Cli.Wrap("docker")
             .WithArguments([
                 "exec", "boltz-lnd", "lncli", "--network=regtest", "openchannel", $"--node_key={counterpartyPubKey}",
-                "--connect=lnd:9735", "--local_amt=1000000", "--sat_per_vbyte=1", "--min_confs=0"
+                "--connect=lnd:9735", "--local_amt=3000000", "--sat_per_vbyte=1", "--min_confs=0"
             ])
             .ExecuteBufferedAsync(cancellationToken);
 

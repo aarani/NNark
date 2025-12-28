@@ -35,7 +35,7 @@ public class SwapManagementServiceTests
         }
         catch (Exception e)
         {
-            Assert.Inconclusive($"Boltz/Fulmine failed to initialize, test cannot be performed, error: {e}");
+            Assert.Inconclusive($"Boltz/Fulmine failed to initialize, test cannot be performed");
             throw;
         }
     }
