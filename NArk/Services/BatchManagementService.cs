@@ -103,30 +103,6 @@ public class BatchManagementService(
         }
     }
 
-    public async Task StopAsync(CancellationToken cancellationToken)
-    {
-        if (_serviceCts != null)
-            await _serviceCts!.CancelAsync();
-
-
-        foreach (var (_, connection) in _connections)
-        {
-            try
-            {
-                await connection.CancellationTokenSource.CancelAsync();
-            }
-            catch
-            {
-                // ignored
-            }
-        }
-
-        foreach (var (_, connection) in _connections)
-            await connection.ConnectionTask;
-
-        _activeIntents.Clear();
-        _activeBatchSessions.Clear();
-    }
 
     #region Private Methods
 
@@ -475,35 +451,44 @@ public class BatchManagementService(
             // Already disposed, ignore
         }
 
-        foreach (var (_, connection) in _connections)
+        await _connectionManipulationSemaphore.WaitAsync();
+        try
         {
-            try
+            foreach (var (_, connection) in _connections)
             {
-                await connection.CancellationTokenSource.CancelAsync();
-            }
-            catch (ObjectDisposedException)
-            {
-                // ignored
-            }
+                try
+                {
+                    await connection.CancellationTokenSource.CancelAsync();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // ignored
+                }
 
-            try
-            {
-                await connection.ConnectionTask;
-            }
-            catch
-            {
-                // ignored
-            }
+                try
+                {
+                    await connection.ConnectionTask;
+                }
+                catch
+                {
+                    // ignored
+                }
 
-            try
-            {
-                connection.CancellationTokenSource.Dispose();
-            }
-            catch (ObjectDisposedException)
-            {
-                // ignored
+                try
+                {
+                    connection.CancellationTokenSource.Dispose();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // ignored
+                }
             }
         }
+        finally
+        {
+            _connectionManipulationSemaphore.Release();
+        }
+
 
         try
         {
