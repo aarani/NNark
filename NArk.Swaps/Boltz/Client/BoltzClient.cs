@@ -1,12 +1,16 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Options;
+using NArk.Swaps.Boltz.Models;
 
 namespace NArk.Swaps.Boltz.Client;
 
 public partial class BoltzClient
 {
     private readonly HttpClient _httpClient;
+    private readonly IOptions<BoltzClientOptions> _options;
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
@@ -16,9 +20,11 @@ public partial class BoltzClient
     /// Initializes a new instance of the <see cref="BoltzClient"/> class.
     /// </summary>
     /// <param name="httpClient">The HttpClient to use for REST API requests.</param>
-    public BoltzClient(HttpClient httpClient)
+    public BoltzClient(HttpClient httpClient, IOptions<BoltzClientOptions> options)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _httpClient.BaseAddress = new Uri(options.Value.BoltzUrl);
+        _options = options;
     }
 
     /// <summary>
@@ -27,9 +33,10 @@ public partial class BoltzClient
     /// <param name="baseHttpUri">The base HTTP URI of the Boltz API.</param>
     /// <returns>The corresponding WebSocket URI.</returns>
     /// <exception cref="ArgumentNullException">Thrown when baseHttpUri is null.</exception>
-    public Uri DeriveWebSocketUri(Uri? baseHttpUri = null)
+    public Uri DeriveWebSocketUri()
     {
-        baseHttpUri ??= _httpClient.BaseAddress;
+        var baseHttpUri = new Uri(_options.Value.WebsocketUrl);
+
         if (baseHttpUri == null)
         {
             throw new ArgumentNullException(nameof(baseHttpUri), "HttpClient.BaseAddress cannot be null when WebSocket URI is not explicitly provided.");

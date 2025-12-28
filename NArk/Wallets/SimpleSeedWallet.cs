@@ -1,6 +1,7 @@
 using System.Text;
 using NArk.Abstractions.Wallets;
 using NArk.Helpers;
+using NArk.Transport;
 using NBitcoin;
 using NBitcoin.Scripting;
 using NBitcoin.Secp256k1;
@@ -8,7 +9,7 @@ using NBitcoin.Secp256k1.Musig;
 
 namespace NArk.Wallets;
 
-public class SimpleSeedWallet(Network network, IWalletStorage walletStorage) : IWallet
+public class SimpleSeedWallet(IClientTransport clientTransport, IWalletStorage walletStorage) : IWallet
 {
     public async Task CreateNewWallet(string walletIdentifier, CancellationToken cancellationToken = default)
     {
@@ -22,6 +23,7 @@ public class SimpleSeedWallet(Network network, IWalletStorage walletStorage) : I
     public async Task<ISigningEntity> GetNewSigningEntity(string walletIdentifier,
         CancellationToken cancellationToken = default)
     {
+        var network = (await clientTransport.GetServerInfoAsync(cancellationToken)).Network;
         var walletData = await walletStorage.LoadWallet(walletIdentifier, cancellationToken);
         var mnemonic = new Mnemonic(Encoding.UTF8.GetString(walletData.WalletPrivateBytes));
         var extKey = mnemonic.DeriveExtKey();
@@ -56,7 +58,7 @@ public class SimpleSeedWallet(Network network, IWalletStorage walletStorage) : I
                 new Dictionary<string, string>
                 {
                     { "Descriptor", extKey.GetPublicKey().ToHex() },
-                    { "Fingerprint", await GetFingerprint() }
+                    { "Fingerprint", await GetFingerprint(cancellationToken) }
                 };
         }
 

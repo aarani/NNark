@@ -46,7 +46,7 @@ public class SpendingService(
                     coins.Add(
                         await signingService.GetVtxoPsbtSignerByContract(vtxosByContract.Key, vtxo, cancellationToken));
                 }
-                catch (AdditionalInformationRequiredException e)
+                catch (AdditionalInformationRequiredException)
                 {
                     // This is probably a VHTLC contract which needs to be explicitly used by sweeper
                 }

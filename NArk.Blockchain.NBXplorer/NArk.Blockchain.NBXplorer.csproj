@@ -13,6 +13,7 @@
 
     <ItemGroup>
       <PackageReference Include="NBXplorer.Client" Version="5.0.5" />
+      <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.1" />
     </ItemGroup>
 
 </Project>

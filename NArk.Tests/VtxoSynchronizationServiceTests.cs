@@ -10,7 +10,7 @@ namespace NArk.Tests;
 public class VtxoSynchronizationServiceTests
 {
     [Test]
-    public void VtxoSynchronizationService_ReceivesContractsList()
+    public async Task VtxoSynchronizationService_ReceivesContractsList()
     {
         var walletStorage = Substitute.For<IWalletStorage>();
         var vtxoStorage = Substitute.For<IVtxoStorage>();
@@ -22,7 +22,7 @@ public class VtxoSynchronizationServiceTests
         contractStorage.LoadAllContracts("wallet1", Arg.Any<CancellationToken>()).Returns(new HashSet<ArkContractEntity>());
 
         var service = new VtxoSynchronizationService(walletStorage, vtxoStorage, contractStorage, arkClientTransport);
-        service.Start().Wait();
+        await service.StartAsync(CancellationToken.None);
 
         walletStorage.Received(1).LoadAllWallets(Arg.Any<CancellationToken>());
         contractStorage.Received(1).LoadAllContracts(Arg.Is("wallet1"), Arg.Any<CancellationToken>());
@@ -75,7 +75,7 @@ public class VtxoSynchronizationServiceTests
 
         await using (var service =
                      new VtxoSynchronizationService(walletStorage, vtxoStorage, contractStorage, arkClientTransport))
-            service.Start().Wait();
+            await service.StartAsync(CancellationToken.None);
         _ = walletStorage.Received(1).LoadAllWallets(Arg.Any<CancellationToken>());
         _ = contractStorage.Received(1).LoadAllContracts(Arg.Is("wallet1"), Arg.Any<CancellationToken>());
         _ = arkClientTransport.Received(1).GetVtxoByScriptsAsSnapshot(
@@ -139,7 +139,7 @@ public class VtxoSynchronizationServiceTests
 
         await using (var service =
                      new VtxoSynchronizationService(walletStorage, vtxoStorage, contractStorage, arkClientTransport))
-            await service.Start();
+            await service.StartAsync(CancellationToken.None);
 
         _ = walletStorage.Received(1).LoadAllWallets(Arg.Any<CancellationToken>());
         _ = contractStorage.Received(1).LoadAllContracts(Arg.Is("wallet1"), Arg.Any<CancellationToken>());
@@ -205,7 +205,7 @@ public class VtxoSynchronizationServiceTests
         await using (var service =
                      new VtxoSynchronizationService(walletStorage, vtxoStorage, contractStorage, arkClientTransport))
         {
-            await service.Start();
+            await service.StartAsync(CancellationToken.None);
 
             contractStorage.LoadAllContracts("wallet1", Arg.Any<CancellationToken>()).Returns(new HashSet<ArkContractEntity>
             {

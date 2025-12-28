@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 using NArk.Abstractions;
 using NArk.Abstractions.Contracts;
 using NArk.Abstractions.Intents;
@@ -6,26 +7,27 @@ using NArk.Abstractions.VTXOs;
 using NArk.Abstractions.Wallets;
 using NArk.Helpers;
 using NArk.Models;
+using NArk.Models.Options;
 using NArk.Transactions;
+using NArk.Transport;
 using NBitcoin;
 using NBitcoin.Secp256k1;
 
 namespace NArk.Services;
 
 public class IntentGenerationService(
+    IClientTransport clientTransport,
     IWalletStorage walletStorage,
     ISigningService signingService,
     IIntentStorage intentStorage,
     IContractStorage contractStorage,
     IVtxoStorage vtxoStorage,
     IIntentScheduler intentScheduler,
-    Network network,
-    TimeSpan pollInterval
+    IOptions<IntentGenerationServiceOptions>? options = null
 ) : IAsyncDisposable
 {
     private readonly CancellationTokenSource _shutdownCts = new();
     private Task? _generationTask;
-
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
         var multiToken = CancellationTokenSource.CreateLinkedTokenSource(_shutdownCts.Token, cancellationToken);
@@ -35,6 +37,8 @@ public class IntentGenerationService(
 
     private async Task DoGenerationLoop(CancellationToken token)
     {
+        var serverInfo = await clientTransport.GetServerInfoAsync(token);
+
         try
         {
             while (!token.IsCancellationRequested)
@@ -73,7 +77,7 @@ public class IntentGenerationService(
                             continue;
 
                         var intentTxs = await CreateIntents(
-                            network,
+                            serverInfo.Network,
                             [await signers[intentSpec.Coins[0]].SigningEntity.GetPublicKey(token)],
                             intentSpec.ValidFrom,
                             intentSpec.ValidUntil,
@@ -92,7 +96,7 @@ public class IntentGenerationService(
                     }
                 }
 
-                await Task.Delay(pollInterval, token);
+                await Task.Delay(options?.Value.PollInterval ?? TimeSpan.FromMinutes(5), token);
             }
         }
         catch (OperationCanceledException)

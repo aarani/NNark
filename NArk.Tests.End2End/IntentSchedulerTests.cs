@@ -2,9 +2,11 @@ using System.Security.Cryptography;
 using Aspire.Hosting;
 using CliWrap;
 using CliWrap.Buffered;
+using Microsoft.Extensions.Options;
 using NArk.Abstractions.Intents;
 using NArk.Blockchain.NBXplorer;
 using NArk.Contracts;
+using NArk.Models.Options;
 using NArk.Services;
 using NArk.Transport;
 using NArk.Transport.GrpcClient;
@@ -23,7 +25,7 @@ public class IntentSchedulerTests
     {
         var builder = await DistributedApplicationTestingBuilder
             .CreateAsync<Projects.NArk_AppHost>(
-                args: [],
+                args: ["--noswap"],
                 configureBuilder: (appOptions, _) => { appOptions.AllowUnsecuredTransport = true; }
             );
 
@@ -40,7 +42,9 @@ public class IntentSchedulerTests
         await _app.DisposeAsync();
     }
 
-    private async Task<(InMemoryWalletStorage inMemoryWalletStorage, InMemoryVtxoStorage vtxoStorage, ContractService contractService, InMemoryContractStorage contracts, SimpleSeedWallet wallet, IClientTransport clientTransport, VtxoSynchronizationService vtxoSync)> GetFundedWallet()
+    private async Task<(InMemoryWalletStorage inMemoryWalletStorage, InMemoryVtxoStorage vtxoStorage, ContractService
+        contractService, InMemoryContractStorage contracts, SimpleSeedWallet wallet, IClientTransport clientTransport,
+        VtxoSynchronizationService vtxoSync)> GetFundedWallet()
     {
         var network = Network.RegTest;
 
@@ -56,7 +60,7 @@ public class IntentSchedulerTests
         // Create a new wallet
         var inMemoryWalletStorage = new InMemoryWalletStorage();
         var contracts = new InMemoryContractStorage();
-        var wallet = new SimpleSeedWallet(network, inMemoryWalletStorage);
+        var wallet = new SimpleSeedWallet(clientTransport, inMemoryWalletStorage);
         await wallet.CreateNewWallet("wallet1");
 
         // Start vtxo synchronization service
@@ -66,7 +70,7 @@ public class IntentSchedulerTests
             contracts,
             clientTransport
         );
-        await vtxoSync.Start();
+        await vtxoSync.StartAsync(CancellationToken.None);
 
         var contractService = new ContractService(wallet, contracts, clientTransport);
 
@@ -100,21 +104,30 @@ public class IntentSchedulerTests
         var walletDetails = await GetFundedWallet();
 
         // The threshold is so high, it will force an intent generation
-        var scheduler = new SimpleIntentScheduler(walletDetails.contractService, new ChainTimeProvider(Network.RegTest, _app.GetEndpoint("nbxplorer", "http")), TimeSpan.FromHours(2), 2000);
+        var scheduler = new SimpleIntentScheduler(walletDetails.contractService,
+            new ChainTimeProvider(Network.RegTest, _app.GetEndpoint("nbxplorer", "http")),
+            new OptionsWrapper<SimpleIntentSchedulerOptions>(new SimpleIntentSchedulerOptions()
+            { Threshold = TimeSpan.FromHours(2), ThresholdHeight = 2000 }));
         var intentStorage = new InMemoryIntentStorage();
-        await using (var intentGeneration = new IntentGenerationService(walletDetails.inMemoryWalletStorage,
-            new SigningService(walletDetails.wallet, walletDetails.contracts, Network.RegTest), intentStorage,
-            walletDetails.contracts, walletDetails.vtxoStorage, scheduler, Network.RegTest, TimeSpan.FromSeconds(20)))
+        await using (var intentGeneration = new IntentGenerationService(walletDetails.clientTransport,
+                         walletDetails.inMemoryWalletStorage,
+                         new SigningService(walletDetails.wallet, walletDetails.contracts,
+                             walletDetails.clientTransport), intentStorage,
+                         walletDetails.contracts, walletDetails.vtxoStorage, scheduler,
+                         new OptionsWrapper<IntentGenerationServiceOptions>(new IntentGenerationServiceOptions()
+                         { PollInterval = TimeSpan.FromMinutes(5) })))
         {
             await intentGeneration.StartAsync();
             await Task.Delay(TimeSpan.FromSeconds(15));
         }
+
         await using (var intentSync = new IntentSynchronizationService(intentStorage, walletDetails.clientTransport))
         {
             await intentSync.StartAsync();
             await Task.Delay(TimeSpan.FromSeconds(15));
         }
 
-        Assert.That((await intentStorage.GetIntents("wallet1")).Any(i => i.State is ArkIntentState.WaitingForBatch), Is.True);
+        Assert.That((await intentStorage.GetIntents("wallet1")).Any(i => i.State is ArkIntentState.WaitingForBatch),
+            Is.True);
     }
 }

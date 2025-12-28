@@ -23,7 +23,6 @@ namespace NArk.Swaps.Services;
 
 public class SwapsManagementService : IAsyncDisposable
 {
-    private readonly Uri? _websocketUrl;
     private readonly SpendingService _spendingService;
     private readonly IClientTransport _clientTransport;
     private readonly IVtxoStorage _vtxoStorage;
@@ -45,26 +44,25 @@ public class SwapsManagementService : IAsyncDisposable
     private readonly TransactionHelpers.ArkTransactionBuilder _transactionBuilder;
 
     public SwapsManagementService(
-        Uri boltzUrl,
-        Uri? websocketUrl,
         SpendingService spendingService,
         IClientTransport clientTransport,
         IVtxoStorage vtxoStorage,
         IWallet wallet,
         ISwapStorage swapsStorage,
-        IContractService contractService)
+        IContractService contractService,
+        BoltzClient boltzClient
+    )
     {
-        _websocketUrl = websocketUrl;
         _spendingService = spendingService;
         _clientTransport = clientTransport;
         _vtxoStorage = vtxoStorage;
         _wallet = wallet;
         _swapsStorage = swapsStorage;
         _contractService = contractService;
-        _boltzClient = new BoltzClient(new HttpClient { BaseAddress = boltzUrl });
+        _boltzClient = boltzClient;
         _boltzService = new BoltzSwapService(
             _boltzClient,
-            clientTransport
+            _clientTransport
         );
         _transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(clientTransport);
 
@@ -236,7 +234,7 @@ public class SwapsManagementService : IAsyncDisposable
 
     private async Task DoStatusCheck(HashSet<string> swapsIds, CancellationToken cancellationToken)
     {
-        await using var websocketClient = new BoltzWebsocketClient(_boltzClient.DeriveWebSocketUri(_websocketUrl));
+        await using var websocketClient = new BoltzWebsocketClient(_boltzClient.DeriveWebSocketUri());
         websocketClient.OnAnyEventReceived += OnSwapEventReceived;
         try
         {

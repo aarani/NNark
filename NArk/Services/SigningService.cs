@@ -3,6 +3,7 @@ using NArk.Abstractions.VTXOs;
 using NArk.Abstractions.Wallets;
 using NArk.Contracts;
 using NArk.Transactions;
+using NArk.Transport;
 using NBitcoin;
 
 namespace NArk.Services;
@@ -10,13 +11,14 @@ namespace NArk.Services;
 public class SigningService(
     IWallet wallet,
     IContractStorage contractStorage,
-    Network network
+    IClientTransport clientTransport
 ) : ISigningService
 {
     public async Task<ArkPsbtSigner> GetVtxoPsbtSignerByContract(ArkContractEntity contractEntity, ArkVtxo vtxo,
         CancellationToken cancellationToken = default)
     {
-        var parsedContract = ArkContract.Parse(contractEntity.Type, contractEntity.AdditionalData, network);
+        var serverInfo = await clientTransport.GetServerInfoAsync(cancellationToken);
+        var parsedContract = ArkContract.Parse(contractEntity.Type, contractEntity.AdditionalData, serverInfo.Network);
         if (parsedContract is null)
             throw new UnableToSignUnknownContracts("Could not parse contract");
         var arkCoin = parsedContract.ToArkCoin(contractEntity.WalletIdentifier, vtxo);
@@ -30,10 +32,11 @@ public class SigningService(
 
     public async Task<ArkPsbtSigner> GetPsbtSigner(ArkVtxo vtxo, CancellationToken cancellationToken = default)
     {
+        var serverInfo = await clientTransport.GetServerInfoAsync(cancellationToken);
         var contract = await contractStorage.LoadContractByScript(vtxo.Script, cancellationToken);
         if (contract is null)
             throw new UnableToSignUnknownContracts("Could not find contract for vtxo");
-        var parsedContract = ArkContract.Parse(contract.Type, contract.AdditionalData, network);
+        var parsedContract = ArkContract.Parse(contract.Type, contract.AdditionalData, serverInfo.Network);
         if (parsedContract is null)
             throw new UnableToSignUnknownContracts("Could not parse contract");
         var arkCoin = parsedContract.ToArkCoin(contract.WalletIdentifier, vtxo);

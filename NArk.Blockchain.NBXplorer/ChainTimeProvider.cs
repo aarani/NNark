@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using NArk.Abstractions.Blockchain;
 using NBitcoin;
 using NBXplorer;
@@ -12,6 +13,9 @@ public class ChainTimeProvider : IChainTimeProvider
     {
         _client = new ExplorerClient(new NBXplorerNetworkProvider(network.ChainName).GetBTC(), uri);
     }
+
+    public ChainTimeProvider(IOptions<ChainTimeProviderOptions> options)
+        : this(options.Value.Network, options.Value.Uri) { }
 
     public async Task<TimeHeight> GetChainTime(CancellationToken cancellationToken = default)
     {

@@ -25,7 +25,7 @@ public class BatchManagementService(
     IWallet arkWalletService,
     IClientTransport clientTransport,
     IVtxoStorage vtxoStorage,
-    SigningService signingService)
+    ISigningService signingService)
     : IAsyncDisposable
 {
     private record BatchSessionWithConnectionId(
@@ -86,6 +86,7 @@ public class BatchManagementService(
 
                 var connectionId = RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue);
                 var newCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                await LoadActiveIntentsAsync(cancellationToken);
                 var newFreeConnection = RunSharedEventStreamAsync(connectionId, newCts.Token);
                 _connections[connectionId] = new Connection(
                     connectionId,

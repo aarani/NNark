@@ -55,10 +55,11 @@ public class VtxoSynchronizationService : IAsyncDisposable
         }
     }
 
-    public async Task Start()
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
-        _queryTask = StartQueryLogic(_shutdownCts.Token);
-        await UpdateScriptsView(_shutdownCts.Token);
+        var multiToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
+        _queryTask = StartQueryLogic(multiToken.Token);
+        await UpdateScriptsView(multiToken.Token);
     }
 
     private async Task UpdateScriptsView(CancellationToken token)
