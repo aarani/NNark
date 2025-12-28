@@ -528,7 +528,6 @@ quote = ""BTC""
 rate = 1
 fee = 0
 swapInFee = 0.00
-invoiceExpiry = 361
 maxSwapAmount = 4294967
 minSwapAmount = 1000
 
