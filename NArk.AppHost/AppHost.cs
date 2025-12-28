@@ -460,13 +460,19 @@ tlsextradomain=lnd")
             server_url = "http://ark:7070"
         }, cancellationToken: cancellationToken);
 
+        await Task.Delay(TimeSpan.FromSeconds(1));
+
+
         await fulmineHttpClient.PostAsJsonAsync("/api/v1/wallet/unlock", new
         {
             password = "password"
         }, cancellationToken: cancellationToken);
 
+        await Task.Delay(TimeSpan.FromSeconds(1));
+
         var fulmineAddressResponse =
             await fulmineHttpClient.GetFromJsonAsync<JsonObject>("/api/v1/address", cancellationToken);
+
         var address =
             (fulmineAddressResponse?["address"] ??
              throw new InvalidOperationException("Reading fulmine address failed."))
