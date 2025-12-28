@@ -10,7 +10,7 @@ public class InMemorySwapStorage : ISwapStorage
     private readonly ConcurrentDictionary<string, HashSet<ArkSwap>> _swaps = new();
 
     public event EventHandler<ArkSwap>? SwapsChanged;
-    public Task SaveSwap(string walletId, ArkSwap swap, bool silent = false, CancellationToken cancellationToken = default)
+    public Task SaveSwap(string walletId, ArkSwap swap, CancellationToken cancellationToken = default)
     {
         lock (_swaps)
         {
@@ -18,8 +18,8 @@ public class InMemorySwapStorage : ISwapStorage
                 swaps.Add(swap);
             else
                 _swaps[walletId] = [swap];
-            if (!silent)
-                SwapsChanged?.Invoke(this, swap);
+            // BEWARE: can this cause infinite loop?
+            SwapsChanged?.Invoke(this, swap);
         }
 
         return Task.CompletedTask;

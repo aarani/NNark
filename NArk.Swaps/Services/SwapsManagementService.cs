@@ -129,8 +129,7 @@ public class SwapsManagementService : IAsyncDisposable
                     swap with { Status = newStatus, UpdatedAt = DateTimeOffset.Now };
 
                 await _swapsStorage.SaveSwap(swap.WalletId,
-                    newSwap,
-                    true, cancellationToken: cancellationToken);
+                    newSwap, cancellationToken: cancellationToken);
             }
         }
     }
@@ -212,7 +211,7 @@ public class SwapsManagementService : IAsyncDisposable
 
         var newSwap =
             swap with { Status = ArkSwapStatus.Refunded, UpdatedAt = DateTimeOffset.Now };
-        await _swapsStorage.SaveSwap(newSwap.WalletId, newSwap, false, CancellationToken.None);
+        await _swapsStorage.SaveSwap(newSwap.WalletId, newSwap, CancellationToken.None);
 
         //logger.LogInformation("Successfully refunded submarine swap {SwapId} with Ark txid {ArkTxid}", 
         //    swap.SwapId, submitResponse.ArkTxid);
@@ -226,7 +225,7 @@ public class SwapsManagementService : IAsyncDisposable
             "invoice.failedToPay" or "invoice.expired" or "swap.expired" or "transaction.failed" or "transaction.refunded" =>
                 ArkSwapStatus.Failed,
             "transaction.mempool" => ArkSwapStatus.Pending,
-            "transaction.confirmed" or "invoice.settled" => ArkSwapStatus.Settled,
+            "transaction.confirmed" or "invoice.settled" or "transaction.claimed" => ArkSwapStatus.Settled,
             _ => ArkSwapStatus.Unknown
         };
     }
@@ -297,7 +296,7 @@ public class SwapsManagementService : IAsyncDisposable
                 DateTimeOffset.UtcNow,
                 DateTimeOffset.UtcNow,
                 invoice.Hash.ToString()
-            ), false, cancellationToken);
+            ), cancellationToken);
         try
         {
             await _contractService.ImportContract(walletId, swap.Contract, cancellationToken);
@@ -324,7 +323,7 @@ public class SwapsManagementService : IAsyncDisposable
                     DateTimeOffset.UtcNow,
                     DateTimeOffset.UtcNow,
                     invoice.Hash.ToString()
-                ), false, cancellationToken);
+                ), cancellationToken);
             throw;
         }
     }
@@ -346,7 +345,7 @@ public class SwapsManagementService : IAsyncDisposable
                     Status = ArkSwapStatus.Failed,
                     FailReason = e.ToString(),
                     UpdatedAt = DateTimeOffset.UtcNow
-                }, false, cancellationToken);
+                }, cancellationToken);
             throw;
         }
     }
