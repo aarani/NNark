@@ -13,12 +13,12 @@ public record ArkSwap(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     string Hash);
+
 public enum ArkSwapStatus
 {
     Pending,
     Settled,
     Failed,
-    PendingRefund,
     Refunded,
     Unknown
 }

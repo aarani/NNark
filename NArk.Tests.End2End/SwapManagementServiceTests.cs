@@ -1,5 +1,7 @@
 using Aspire.Hosting;
 using BTCPayServer.Lightning;
+using CliWrap;
+using CliWrap.Buffered;
 using Microsoft.Extensions.Options;
 using NArk.Services;
 using NArk.Swaps.Boltz.Client;
@@ -75,6 +77,50 @@ public class SwapManagementServiceTests
             true,
             CancellationToken.None
         );
+
+        await settledSwapTcs.Task.WaitAsync(TimeSpan.FromMinutes(2));
+    }
+
+    [Test]
+    [Ignore("This test requires sweeping logic, ignoring until that's implemented.")]
+
+    public async Task CanReceiveArkFundsUsingReverseSwap()
+    {
+        var boltzApi = _app.GetEndpoint("boltz", "api");
+        var boltzWs = _app.GetEndpoint("boltz", "ws");
+        var testingPrerequisite = await FundedWalletHelper.GetFundedWallet(_app);
+        var swapStorage = new InMemorySwapStorage();
+        var boltzClient = new BoltzClient(new HttpClient(),
+            new OptionsWrapper<BoltzClientOptions>(new BoltzClientOptions()
+            { BoltzUrl = boltzApi.ToString(), WebsocketUrl = boltzWs.ToString() }));
+        await using var swapMgr = new SwapsManagementService(
+            new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
+                new SigningService(testingPrerequisite.wallet, testingPrerequisite.contracts,
+                    testingPrerequisite.clientTransport),
+                testingPrerequisite.contractService, testingPrerequisite.clientTransport),
+            testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
+            testingPrerequisite.wallet,
+            swapStorage, testingPrerequisite.contractService, boltzClient);
+
+        var settledSwapTcs = new TaskCompletionSource();
+
+        swapStorage.SwapsChanged += (sender, swap) =>
+        {
+            if (swap.Status == ArkSwapStatus.Settled)
+                settledSwapTcs.TrySetResult();
+        };
+
+        await swapMgr.StartAsync(CancellationToken.None);
+        var invoice = await swapMgr.InitiateReverseSwap(
+            "wallet1",
+            new CreateInvoiceParams(LightMoney.Satoshis(50000), "Test", TimeSpan.FromHours(1)),
+            CancellationToken.None
+        );
+
+        // Until Aspire has a way to run commands with parameters :(
+        await Cli.Wrap("docker")
+            .WithArguments(["exec", "lnd", "lncli", "--network=regtest", "payinvoice", "--force", invoice])
+            .ExecuteBufferedAsync();
 
         await settledSwapTcs.Task.WaitAsync(TimeSpan.FromMinutes(2));
     }

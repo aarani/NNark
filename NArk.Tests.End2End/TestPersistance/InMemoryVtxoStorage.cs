@@ -8,7 +8,7 @@ public class InMemoryVtxoStorage : IVtxoStorage
 {
     private ConcurrentDictionary<string, ArkVtxo> _vtxos = new();
 
-    public event EventHandler? VtxosChanged;
+    public event EventHandler<ArkVtxo>? VtxosChanged;
 
     public virtual Task SaveVtxo(ArkVtxo vtxo, CancellationToken cancellationToken = default)
     {
@@ -19,7 +19,7 @@ public class InMemoryVtxoStorage : IVtxoStorage
         }
         finally
         {
-            VtxosChanged?.Invoke(null, EventArgs.Empty);
+            VtxosChanged?.Invoke(null, vtxo);
         }
     }
 

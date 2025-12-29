@@ -36,10 +36,27 @@ public class VtxoSynchronizationService : IAsyncDisposable
         _contractStorage = contractStorage;
         _arkClientTransport = arkClientTransport;
 
-        _contractStorage.ContractsChanged += OnContractStorageOnContractsChanged;
+        _contractStorage.ContractsChanged += OnContractsChanged;
+        _vtxoStorage.VtxosChanged += OnVtxosChanged;
     }
 
-    private async void OnContractStorageOnContractsChanged(object? sender, EventArgs e)
+    private async void OnVtxosChanged(object? sender, ArkVtxo v)
+    {
+        try
+        {
+            await UpdateScriptsView(_shutdownCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // ignored
+        }
+        catch
+        {
+            // ignored
+        }
+    }
+
+    private async void OnContractsChanged(object? sender, EventArgs e)
     {
         try
         {

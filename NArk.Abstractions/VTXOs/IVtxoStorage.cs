@@ -4,7 +4,7 @@ namespace NArk.Abstractions.VTXOs;
 
 public interface IVtxoStorage
 {
-    public event EventHandler? VtxosChanged;
+    public event EventHandler<ArkVtxo>? VtxosChanged;
 
     Task SaveVtxo(ArkVtxo vtxo, CancellationToken cancellationToken = default);
     Task<ArkVtxo?> GetVtxoByOutPoint(OutPoint outpoint, CancellationToken cancellationToken = default);

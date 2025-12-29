@@ -137,10 +137,15 @@ var ark =
         .WithEnvironment("ARKD_LIVE_STORE_TYPE", "inmemory")
         .WithEnvironment("ARKD_UNLOCKER_TYPE", "env")
         .WithEnvironment("ARKD_UNLOCKER_PASSWORD", "secret")
+        .WithOtlpExporter(OtlpProtocol.HttpProtobuf)
+        .WithEnvironment(callback =>
+        {
+            var otlpEndpoint = callback.EnvironmentVariables.GetValueOrDefault("OTEL_EXPORTER_OTLP_ENDPOINT", "");
+            callback.EnvironmentVariables["ARKD_OTEL_COLLECTOR_ENDPOINT"] = otlpEndpoint;
+        })
         .WithVolume("nark-ark", "/app/data")
         .OnResourceReady(StartArkResource)
         .WithHttpEndpoint(7070, 7070, name: "arkd");
-
 async Task StartArkResource(ContainerResource cr, ResourceReadyEvent @event, CancellationToken cancellationToken)
 {
     await Task.Delay(TimeSpan.FromSeconds(5));
@@ -215,7 +220,7 @@ async Task StartArkResource(ContainerResource cr, ResourceReadyEvent @event, Can
     var chopsticksEndpoint = await chopsticks.GetEndpoint("http", null!).GetValueAsync(cancellationToken);
     await new HttpClient().PostAsJsonAsync($"{chopsticksEndpoint}/faucet", new
     {
-        amount = 1,
+        amount = 10,
         address = address
     }, cancellationToken: cancellationToken);
 

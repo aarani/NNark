@@ -6,7 +6,6 @@ using NArk.Swaps.Boltz.Models.Swaps.Reverse;
 using NArk.Swaps.Boltz.Models.Swaps.Submarine;
 using NArk.Swaps.Extensions;
 using NArk.Swaps.Helpers;
-using NArk.Swaps.Models;
 using NArk.Transport;
 using NBitcoin;
 using NBitcoin.Crypto;
@@ -83,7 +82,7 @@ internal class BoltzSwapService(BoltzClient boltzClient, IClientTransport client
         {
             From = "BTC",
             To = "ARK",
-            OnchainAmount = createInvoiceRequest.Amount.MilliSatoshi / 1000,
+            OnchainAmount = (long)createInvoiceRequest.Amount.ToUnit(LightMoneyUnit.Satoshi),
             ClaimPublicKey =
                 Convert.ToHexStringLower(extractedReceiver.PubKey?.ToBytes() ??
                                          extractedReceiver.XOnlyPubKey.ToBytes()), // Receiver will claim the VTXO
@@ -116,7 +115,7 @@ internal class BoltzSwapService(BoltzClient boltzClient, IClientTransport client
         // Verify the invoice amount is greater than onchain amount (includes fees)
         var invoiceAmountSats = bolt11.MinimumAmount.ToUnit(LightMoneyUnit.Satoshi);
         var onchainAmountSats = createInvoiceRequest.Amount.ToUnit(LightMoneyUnit.Satoshi);
-        if (invoiceAmountSats <= onchainAmountSats)
+        if (invoiceAmountSats < onchainAmountSats)
         {
             throw new InvalidOperationException(
                 $"Invoice amount ({invoiceAmountSats} sats) must be greater than onchain amount ({onchainAmountSats} sats) to cover swap fees");

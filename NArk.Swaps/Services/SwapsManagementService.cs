@@ -67,7 +67,8 @@ public class SwapsManagementService : IAsyncDisposable
         _transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(clientTransport);
 
         swapsStorage.SwapsChanged += OnSwapsChanged;
-        vtxoStorage.VtxosChanged += OnVtxosChanged;
+        // It is possible to listen for vtxos on scripts and use them to figure out the state of swaps
+        // vtxoStorage.VtxosChanged += OnVtxosChanged;
     }
 
     private void OnSwapsChanged(object? sender, ArkSwap _)
@@ -349,11 +350,39 @@ public class SwapsManagementService : IAsyncDisposable
             throw;
         }
     }
-    private void OnVtxosChanged(object? sender, EventArgs e)
+
+    public async Task<string> InitiateReverseSwap(string walletId, CreateInvoiceParams invoiceParams,
+        CancellationToken cancellationToken = default)
     {
+        var destinationEntity = await _wallet.GetNewSigningEntity(walletId, cancellationToken);
+        var revSwap =
+            await _boltzService.CreateReverseSwap(
+                invoiceParams,
+                await destinationEntity.GetOutputDescriptor(cancellationToken),
+                cancellationToken
+            );
+        await _contractService.ImportContract(walletId, revSwap.Contract, cancellationToken);
+        await _swapsStorage.SaveSwap(
+            walletId,
+            new ArkSwap(
+                revSwap.Swap.Id,
+                walletId,
+                ArkSwapType.ReverseSubmarine,
+                revSwap.Swap.Invoice,
+                invoiceParams.Amount.MilliSatoshi / 1000,
+                revSwap.Contract.ToString(),
+                revSwap.Swap.LockupAddress,
+                ArkSwapStatus.Pending,
+                null,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow,
+                Convert.ToHexStringLower(revSwap.Hash)
+            ), cancellationToken);
+
+        return revSwap.Swap.Invoice;
     }
 
-    private bool IsRefundableStatus(string status)
+    private static bool IsRefundableStatus(string status)
     {
         // Statuses that indicate a submarine swap can be cooperatively refunded
         return status switch
@@ -368,7 +397,7 @@ public class SwapsManagementService : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _vtxoStorage.VtxosChanged -= OnVtxosChanged;
+        _swapsStorage.SwapsChanged -= OnSwapsChanged;
 
         await _shutdownCts.CancelAsync();
 

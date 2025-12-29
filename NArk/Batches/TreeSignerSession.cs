@@ -32,7 +32,7 @@ public class TreeSignerSession
         if (_musigContexts != null)
             throw new InvalidOperationException("musig contexts already created");
         _musigContexts = new Dictionary<uint256, MusigContext>();
-        var myPubKey = (await _signer.GetOutputDescriptor()).ToPubKey();
+        var myPubKey = (await _signer.GetOutputDescriptor(cancellationToken)).ToPubKey();
         foreach (var g in _graph)
         {
             var tx = g.Root.GetGlobalTransaction();
@@ -116,7 +116,7 @@ public class TreeSignerSession
         if (_myNonces != null)
             throw new InvalidOperationException("nonces already generated");
 
-        var myPrivKey = await _signer.DerivePrivateKey();
+        var myPrivKey = await _signer.DerivePrivateKey(cancellationToken);
 
         var res = new Dictionary<uint256, (MusigPrivNonce secNonce, MusigPubNonce pubNonce)>();
         foreach (var (txid, musigContext) in _musigContexts!)
