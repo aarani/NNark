@@ -48,7 +48,9 @@ public class BuilderStyleTests
     [Test]
     public async Task CanParticipateInBatchSessionBuilderStyle()
     {
-        var arkHost = ArkApplicationBuilder.CreateBuilder([])
+        var arkHost =
+            Host.CreateDefaultBuilder([])
+            .AddArk()
             .OnCustomGrpcArk(_app.GetEndpoint("ark", "arkd").ToString())
             .WithIntentStorage<InMemoryIntentStorage>()
             .WithIntentScheduler<SimpleIntentScheduler>()
