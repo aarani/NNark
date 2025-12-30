@@ -3,6 +3,7 @@ using Aspire.Hosting;
 using CliWrap;
 using CliWrap.Buffered;
 using NArk.Contracts;
+using NArk.Safety.AsyncKeyedLock;
 using NArk.Services;
 using NArk.Tests.End2End.TestPersistance;
 using NArk.Transport;
@@ -14,9 +15,7 @@ namespace NArk.Tests.End2End.Common;
 
 internal static class FundedWalletHelper
 {
-    internal static async Task<(InMemoryWalletStorage inMemoryWalletStorage, InMemoryVtxoStorage vtxoStorage, ContractService
-        contractService, InMemoryContractStorage contracts, SimpleSeedWallet wallet, IClientTransport clientTransport,
-        VtxoSynchronizationService vtxoSync)> GetFundedWallet(DistributedApplication app)
+    internal static async Task<(AsyncSafetyService safetyService, InMemoryWalletStorage inMemoryWalletStorage, InMemoryVtxoStorage vtxoStorage, ContractService contractService, InMemoryContractStorage contracts, SimpleSeedWallet wallet, IClientTransport clientTransport, VtxoSynchronizationService vtxoSync)> GetFundedWallet(DistributedApplication app)
     {
         var receivedFirstVtxoTcs = new TaskCompletionSource();
         var vtxoStorage = new InMemoryVtxoStorage();
@@ -33,7 +32,8 @@ internal static class FundedWalletHelper
         // Create a new wallet
         var inMemoryWalletStorage = new InMemoryWalletStorage();
         var contracts = new InMemoryContractStorage();
-        var wallet = new SimpleSeedWallet(clientTransport, inMemoryWalletStorage);
+        var safetyService = new AsyncSafetyService();
+        var wallet = new SimpleSeedWallet(safetyService, clientTransport, inMemoryWalletStorage);
         await wallet.CreateNewWallet("wallet1");
 
         // Start vtxo synchronization service
@@ -67,6 +67,6 @@ internal static class FundedWalletHelper
 
         await receivedFirstVtxoTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        return (inMemoryWalletStorage, vtxoStorage, contractService, contracts, wallet, clientTransport, vtxoSync);
+        return (safetyService, inMemoryWalletStorage, vtxoStorage, contractService, contracts, wallet, clientTransport, vtxoSync);
     }
 }

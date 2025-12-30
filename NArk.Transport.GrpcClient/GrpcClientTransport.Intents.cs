@@ -30,7 +30,7 @@ public partial class GrpcClientTransport
         }
         catch (Exception ex) when (ex.Message.Contains("duplicated input"))
         {
-            throw new AlreadyLockedVtxoException();
+            throw new AlreadyLockedVtxoException("VTXO is already locked by another intent");
         }
     }
 

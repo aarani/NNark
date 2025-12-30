@@ -1,4 +1,5 @@
 using System.Text;
+using NArk.Abstractions.Safety;
 using NArk.Abstractions.Wallets;
 using NArk.Helpers;
 using NArk.Transport;
@@ -9,7 +10,7 @@ using NBitcoin.Secp256k1.Musig;
 
 namespace NArk.Wallets;
 
-public class SimpleSeedWallet(IClientTransport clientTransport, IWalletStorage walletStorage) : IWallet
+public class SimpleSeedWallet(ISafetyService safetyService, IClientTransport clientTransport, IWalletStorage walletStorage) : IWallet
 {
     public async Task CreateNewWallet(string walletIdentifier, CancellationToken cancellationToken = default)
     {
@@ -30,6 +31,7 @@ public class SimpleSeedWallet(IClientTransport clientTransport, IWalletStorage w
         CancellationToken cancellationToken = default)
     {
         var network = (await clientTransport.GetServerInfoAsync(cancellationToken)).Network;
+        await using var @lock = await safetyService.LockKeyAsync($"wallet::{walletIdentifier}", cancellationToken);
         var walletData = await walletStorage.LoadWallet(walletIdentifier, cancellationToken);
         var mnemonic = new Mnemonic(Encoding.UTF8.GetString(walletData.WalletPrivateBytes));
         var extKey = mnemonic.DeriveExtKey();

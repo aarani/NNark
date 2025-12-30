@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using NArk.Abstractions.Blockchain;
 using NArk.Abstractions.Contracts;
 using NArk.Abstractions.Intents;
+using NArk.Abstractions.Safety;
 using NArk.Abstractions.VTXOs;
 using NArk.Abstractions.Wallets;
 using NArk.Models.Options;
@@ -53,6 +54,12 @@ public static class AppExtensions
             _hostBuilder.ConfigureServices(services =>
                 services.Configure<SweeperServiceOptions>(o => { o.ForceRefreshInterval = interval; }));
 
+            return this;
+        }
+
+        public ArkApplicationBuilder WithSafetyService<TSafety>() where TSafety : class, ISafetyService
+        {
+            _hostBuilder.ConfigureServices(services => { services.AddSingleton<ISafetyService, TSafety>(); });
             return this;
         }
 

@@ -94,7 +94,7 @@ public class BatchSessionTests
 
         await using var batchManager = new BatchManagementService(intentStorage, walletDetails.wallet,
                          walletDetails.clientTransport, walletDetails.vtxoStorage,
-                         signingService);
+                         signingService, walletDetails.safetyService);
 
         await batchManager.StartAsync(CancellationToken.None);
 

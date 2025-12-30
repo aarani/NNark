@@ -1,4 +1,5 @@
 using NArk.Abstractions;
+using NArk.Abstractions.Safety;
 using NArk.Contracts;
 using NArk.Models;
 using NArk.Scripts;
@@ -16,9 +17,11 @@ public static class TransactionHelpers
     /// Utility class for building and constructing Ark transactions
     /// </summary>
     public class ArkTransactionBuilder(
-        IClientTransport clientTransport)
+        IClientTransport clientTransport,
+        ISafetyService safetyService)
     {
-        private async Task<PSBT> FinalizeCheckpointTx(PSBT checkpointTx, PSBT receivedCheckpointTx, ArkPsbtSigner coin, CancellationToken cancellationToken)
+        private async Task<PSBT> FinalizeCheckpointTx(PSBT checkpointTx, PSBT receivedCheckpointTx, ArkPsbtSigner coin,
+            CancellationToken cancellationToken)
         {
             // Sign the checkpoint transaction
             var checkpointGtx = receivedCheckpointTx.GetGlobalTransaction();
@@ -26,7 +29,8 @@ public static class TransactionHelpers
                 checkpointGtx.PrecomputeTransactionData([coin.Coin.TxOut]);
 
             receivedCheckpointTx.UpdateFrom(checkpointTx);
-            await coin.SignAndFillPsbt(receivedCheckpointTx, checkpointPrecomputedTransactionData, cancellationToken: cancellationToken);
+            await coin.SignAndFillPsbt(receivedCheckpointTx, checkpointPrecomputedTransactionData,
+                cancellationToken: cancellationToken);
 
             return receivedCheckpointTx;
         }
@@ -85,19 +89,19 @@ public static class TransactionHelpers
                     coin with
                     {
                         Coin = new ArkCoin(
-                        coin.Coin.WalletIdentifier,
-                        checkpointContract,
-                        coin.Coin.ExpiresAt,
-                        coin.Coin.ExpiresAtHeight,
-                        outpoint,
-                        txout.GetTxOut()!,
-                        coin.Coin.SignerDescriptor,
-                        coin.Coin.SpendingScriptBuilder,
-                        coin.Coin.SpendingConditionWitness,
-                        coin.Coin.LockTime,
-                        coin.Coin.Sequence,
-                        coin.Coin.Recoverable
-                    )
+                            coin.Coin.WalletIdentifier,
+                            checkpointContract,
+                            coin.Coin.ExpiresAt,
+                            coin.Coin.ExpiresAtHeight,
+                            outpoint,
+                            txout.GetTxOut()!,
+                            coin.Coin.SignerDescriptor,
+                            coin.Coin.SpendingScriptBuilder,
+                            coin.Coin.SpendingConditionWitness,
+                            coin.Coin.LockTime,
+                            coin.Coin.Sequence,
+                            coin.Coin.Recoverable
+                        )
                     }
                 );
             }
@@ -144,7 +148,6 @@ public static class TransactionHelpers
                         throw new FormatException("BUG: Could not extract Taproot parameters from scriptPubKey");
                     scriptPubKey = new Script(OpcodeType.OP_RETURN, Op.GetPushOp(taprootPubKey.ToBytes()));
                     opReturnCount++;
-
                 }
 
                 arkTx.Send(scriptPubKey, output.Value);
@@ -159,11 +162,13 @@ public static class TransactionHelpers
             //sort the checkpoint coins based on the input index in arkTx
 
             var sortedCheckpointCoins =
-                tx.Inputs.ToDictionary(input => (int)input.Index, input => checkpointCoins.Single(x => x.Coin.Outpoint == input.PrevOut));
+                tx.Inputs.ToDictionary(input => (int)input.Index,
+                    input => checkpointCoins.Single(x => x.Coin.Outpoint == input.PrevOut));
 
             // Sign each input in the Ark transaction
             var precomputedTransactionData =
-                gtx.PrecomputeTransactionData(sortedCheckpointCoins.OrderBy(x => x.Key).Select(x => x.Value.Coin.TxOut).ToArray());
+                gtx.PrecomputeTransactionData(sortedCheckpointCoins.OrderBy(x => x.Key).Select(x => x.Value.Coin.TxOut)
+                    .ToArray());
 
 
             foreach (var (_, coin) in sortedCheckpointCoins)
@@ -209,7 +214,8 @@ public static class TransactionHelpers
         {
             var network = arkTx.Network;
 
-            var response = await clientTransport.SubmitTx(arkTx.ToBase64(), [.. checkpoints.Select(c => c.Psbt.ToBase64())], cancellationToken);
+            var response = await clientTransport.SubmitTx(arkTx.ToBase64(),
+                [.. checkpoints.Select(c => c.Psbt.ToBase64())], cancellationToken);
 
             // Process the signed checkpoints from the server
             var parsedReceivedCheckpoints = response.SignedCheckpointTxs
@@ -220,11 +226,14 @@ public static class TransactionHelpers
             foreach (var signedCheckpoint in checkpoints)
             {
                 var coin = arkCoins.Single(x => x.Coin.Outpoint == signedCheckpoint.Psbt.Inputs.Single().PrevOut);
-                var psbt = await FinalizeCheckpointTx(signedCheckpoint.Psbt, parsedReceivedCheckpoints[signedCheckpoint.Psbt.GetGlobalTransaction().GetHash()], coin, cancellationToken);
+                var psbt = await FinalizeCheckpointTx(signedCheckpoint.Psbt,
+                    parsedReceivedCheckpoints[signedCheckpoint.Psbt.GetGlobalTransaction().GetHash()], coin,
+                    cancellationToken);
                 signedCheckpoints.Add(signedCheckpoint with { Psbt = psbt });
             }
 
-            await clientTransport.FinalizeTx(response.ArkTxId, [.. signedCheckpoints.Select(x => x.Psbt.ToBase64())], cancellationToken: cancellationToken);
+            await clientTransport.FinalizeTx(response.ArkTxId, [.. signedCheckpoints.Select(x => x.Psbt.ToBase64())],
+                cancellationToken: cancellationToken);
         }
 
 
@@ -236,12 +245,25 @@ public static class TransactionHelpers
             if (arkOutputs.Any(o => o.Type is not ArkTxOutType.Vtxo))
                 throw new InvalidOperationException();
             var serverInfo = await clientTransport.GetServerInfoAsync(cancellationToken);
-            var (arkTx, checkpoints) = await ConstructArkTransaction(arkCoins, [.. arkOutputs], serverInfo, cancellationToken);
+
+            foreach (var coin in arkCoins)
+            {
+                if (!await safetyService.TryLockByTimeAsync($"vtxo::{coin.Coin.Outpoint}",
+                        TimeSpan.FromMinutes(1)))
+                {
+                    throw new AlreadyLockedVtxoException(
+                        "VTXO is temporarily locked for another spend request, to prevent double-spend attempt try again later");
+                }
+            }
+
+            var (arkTx, checkpoints) =
+                await ConstructArkTransaction(arkCoins, [.. arkOutputs], serverInfo, cancellationToken);
             await SubmitArkTransaction(arkCoins, arkTx, checkpoints, cancellationToken);
             return arkTx.GetGlobalTransaction().GetHash();
         }
 
-        public async Task<PSBT> ConstructForfeitTx(ArkServerInfo arkServerInfo, ArkPsbtSigner signer, Coin? connector, IDestination forfeitDestination, CancellationToken cancellationToken = default)
+        public async Task<PSBT> ConstructForfeitTx(ArkServerInfo arkServerInfo, ArkPsbtSigner signer, Coin? connector,
+            IDestination forfeitDestination, CancellationToken cancellationToken = default)
         {
             var coin = signer.Coin;
             var p2a = Script.FromHex("51024e73"); // Standard Ark protocol marker
@@ -297,7 +319,8 @@ public static class TransactionHelpers
             var sortedCheckpointCoins =
                 forfeitTx
                     .Inputs
-                    .ToDictionary(input => (int)input.Index, input => coins.Single(x => x.ScriptPubKey == input.GetTxOut()?.ScriptPubKey));
+                    .ToDictionary(input => (int)input.Index,
+                        input => coins.Single(x => x.ScriptPubKey == input.GetTxOut()?.ScriptPubKey));
 
             // Sign each input in the Ark transaction
             var precomputedTransactionData =

@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading.Channels;
 using NArk.Abstractions.Batches;
 using NArk.Abstractions.Intents;
+using NArk.Abstractions.Safety;
 using NArk.Abstractions.VTXOs;
 using NArk.Abstractions.Wallets;
 using NArk.Batches;
@@ -25,7 +26,8 @@ public class BatchManagementService(
     IWallet arkWalletService,
     IClientTransport clientTransport,
     IVtxoStorage vtxoStorage,
-    ISigningService signingService)
+    ISigningService signingService,
+    ISafetyService safetyService)
     : IAsyncDisposable
 {
     private record BatchSessionWithConnectionId(
@@ -356,7 +358,7 @@ public class BatchManagementService(
                 // Create and initialize a batch session
                 var session = new BatchSession(
                     clientTransport,
-                    new TransactionHelpers.ArkTransactionBuilder(clientTransport),
+                    new TransactionHelpers.ArkTransactionBuilder(clientTransport, safetyService),
                     serverInfo.Network,
                     signer,
                     intent,

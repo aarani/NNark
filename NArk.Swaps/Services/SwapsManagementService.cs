@@ -3,6 +3,7 @@ using System.Threading.Channels;
 using BTCPayServer.Lightning;
 using NArk.Abstractions;
 using NArk.Abstractions.Contracts;
+using NArk.Abstractions.Safety;
 using NArk.Abstractions.VTXOs;
 using NArk.Abstractions.Wallets;
 using NArk.Contracts;
@@ -50,6 +51,7 @@ public class SwapsManagementService : IAsyncDisposable
         IWallet wallet,
         ISwapStorage swapsStorage,
         IContractService contractService,
+        ISafetyService safetyService,
         BoltzClient boltzClient
     )
     {
@@ -64,7 +66,7 @@ public class SwapsManagementService : IAsyncDisposable
             _boltzClient,
             _clientTransport
         );
-        _transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(clientTransport);
+        _transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(clientTransport, safetyService);
 
         swapsStorage.SwapsChanged += OnSwapsChanged;
         // It is possible to listen for vtxos on scripts and use them to figure out the state of swaps

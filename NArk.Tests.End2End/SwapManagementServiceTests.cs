@@ -58,10 +58,10 @@ public class SwapManagementServiceTests
             new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
                 new SigningService(testingPrerequisite.wallet, testingPrerequisite.contracts,
                     testingPrerequisite.clientTransport),
-                testingPrerequisite.contractService, testingPrerequisite.clientTransport),
+                testingPrerequisite.contractService, testingPrerequisite.clientTransport, testingPrerequisite.safetyService),
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
             testingPrerequisite.wallet,
-            swapStorage, testingPrerequisite.contractService, boltzClient);
+            swapStorage, testingPrerequisite.contractService, testingPrerequisite.safetyService, boltzClient);
 
         var settledSwapTcs = new TaskCompletionSource();
 
@@ -99,7 +99,7 @@ public class SwapManagementServiceTests
         var spendingService = new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
             new SigningService(testingPrerequisite.wallet, testingPrerequisite.contracts,
                 testingPrerequisite.clientTransport),
-            testingPrerequisite.contractService, testingPrerequisite.clientTransport);
+            testingPrerequisite.contractService, testingPrerequisite.clientTransport, testingPrerequisite.safetyService);
         await using var sweepMgr = new SweeperService(testingPrerequisite.wallet, testingPrerequisite.clientTransport,
             [new SwapSweepPolicy(testingPrerequisite.wallet, swapStorage)], testingPrerequisite.vtxoStorage,
             testingPrerequisite.contracts, spendingService, new OptionsWrapper<SweeperServiceOptions>(new SweeperServiceOptions() { ForceRefreshInterval = TimeSpan.Zero }));
@@ -108,7 +108,7 @@ public class SwapManagementServiceTests
             spendingService,
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
             testingPrerequisite.wallet,
-            swapStorage, testingPrerequisite.contractService, boltzClient);
+            swapStorage, testingPrerequisite.contractService, testingPrerequisite.safetyService, boltzClient);
 
         var settledSwapTcs = new TaskCompletionSource();
 
@@ -147,10 +147,10 @@ public class SwapManagementServiceTests
             new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
                 new SigningService(testingPrerequisite.wallet, testingPrerequisite.contracts,
                     testingPrerequisite.clientTransport),
-                testingPrerequisite.contractService, testingPrerequisite.clientTransport),
+                testingPrerequisite.contractService, testingPrerequisite.clientTransport, testingPrerequisite.safetyService),
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
             testingPrerequisite.wallet,
-            swapStorage, testingPrerequisite.contractService, boltzClient);
+            swapStorage, testingPrerequisite.contractService, testingPrerequisite.safetyService, boltzClient);
 
         var refundedSwapTcs = new TaskCompletionSource();
 

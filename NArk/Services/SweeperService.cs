@@ -127,11 +127,15 @@ public class SweeperService(
                         CancellationToken.None);
                     break;
                 }
+                catch (AlreadyLockedVtxoException)
+                {
+                    break;
+                }
                 catch (Exception e)
                 {
                     if (possiblePaths.Count == 0)
                     {
-                        // log exception all paths failed.
+                        // log exception as all paths failed.
                     }
                 }
             }

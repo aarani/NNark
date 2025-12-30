@@ -5,6 +5,7 @@ using CliWrap.Buffered;
 using NArk.Abstractions;
 using NArk.Abstractions.VTXOs;
 using NArk.Contracts;
+using NArk.Safety.AsyncKeyedLock;
 using NArk.Services;
 using NArk.Tests.End2End.TestPersistance;
 using NArk.Transport.GrpcClient;
@@ -43,7 +44,6 @@ public class VtxoSynchronizationTests
     [Test]
     public async Task CanReceiveVtxosFromImportedContract()
     {
-        var network = Network.RegTest;
         // Mock the VTXO storage so we can listen for new vtxos
         var vtxoStorage = Substitute.For<IVtxoStorage>();
         vtxoStorage.GetUnspentVtxos().ReturnsForAnyArgs([]);
@@ -56,7 +56,8 @@ public class VtxoSynchronizationTests
         // Create a new wallet
         var inMemoryWalletStorage = new InMemoryWalletStorage();
         var contracts = new InMemoryContractStorage();
-        var wallet = new SimpleSeedWallet(clientTransport, inMemoryWalletStorage);
+        var safetyService = new AsyncSafetyService();
+        var wallet = new SimpleSeedWallet(safetyService, clientTransport, inMemoryWalletStorage);
         await wallet.CreateNewWallet("wallet1");
 
         // Start vtxo synchronization service
@@ -117,7 +118,9 @@ public class VtxoSynchronizationTests
 
         var vtxoStorage = GetMockVtxoStorageWithImpl();
 
-        var wallet = new SimpleSeedWallet(clientTransport, inMemoryWalletStorage);
+        var safetyService = new AsyncSafetyService();
+
+        var wallet = new SimpleSeedWallet(safetyService, clientTransport, inMemoryWalletStorage);
         await wallet.CreateNewWallet("wallet1");
         await wallet.CreateNewWallet("wallet2");
 
@@ -165,7 +168,7 @@ public class VtxoSynchronizationTests
 
         vtxoStorage.ClearReceivedCalls();
         var spendingService = new SpendingService(vtxoStorage, contracts,
-            new SigningService(wallet, contracts, clientTransport), contractService, clientTransport);
+            new SigningService(wallet, contracts, clientTransport), contractService, clientTransport, safetyService);
 
         await spendingService.Spend("wallet1",
         [

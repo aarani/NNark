@@ -7,6 +7,7 @@ using NArk.Abstractions.Wallets;
 using NArk.Blockchain.NBXplorer;
 using NArk.Hosting;
 using NArk.Models.Options;
+using NArk.Safety.AsyncKeyedLock;
 using NArk.Services;
 using NArk.Tests.End2End.TestPersistance;
 using NArk.Wallets;
@@ -52,6 +53,7 @@ public class BuilderStyleTests
             Host.CreateDefaultBuilder([])
             .AddArk()
             .OnCustomGrpcArk(_app.GetEndpoint("ark", "arkd").ToString())
+            .WithSafetyService<AsyncSafetyService>()
             .WithIntentStorage<InMemoryIntentStorage>()
             .WithIntentScheduler<SimpleIntentScheduler>()
             .WithSwapStorage<InMemorySwapStorage>()
@@ -91,7 +93,7 @@ public class BuilderStyleTests
 
         var gotBatchTcs = new TaskCompletionSource();
 
-        intentStorage.IntentChanged += (sender, intent) =>
+        intentStorage.IntentChanged += (_, intent) =>
         {
             if (intent.State == ArkIntentState.BatchSucceeded)
                 gotBatchTcs.TrySetResult();
