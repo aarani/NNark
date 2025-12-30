@@ -18,7 +18,6 @@ public class SpendingService(
 {
     public async Task<uint256> Spend(string walletId, ArkPsbtSigner[] inputs, ArkTxOut[] outputs, CancellationToken cancellationToken = default)
     {
-
         var serverInfo = await transport.GetServerInfoAsync(cancellationToken);
 
         var totalInput = inputs.Sum(x => x.Coin.TxOut.Value);

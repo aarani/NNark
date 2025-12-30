@@ -114,7 +114,7 @@ public class SweeperService(
 
     private async Task Sweep(Dictionary<OutPoint, PriorityQueue<ArkCoin, int>> outpointToCoins)
     {
-        foreach (var (outpoint, possiblePaths) in outpointToCoins)
+        foreach (var (_, possiblePaths) in outpointToCoins)
         {
             while (possiblePaths.Count > 0)
             {

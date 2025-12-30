@@ -7,10 +7,12 @@ public class ArkHostedLifecycle(
     VtxoSynchronizationService vtxoSynchronizationService,
     IntentGenerationService intentGenerationService,
     IntentSynchronizationService intentSynchronizationService,
-    BatchManagementService batchManagementService) : IHostedLifecycleService
+    BatchManagementService batchManagementService,
+    SweeperService sweeperService) : IHostedLifecycleService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        await sweeperService.StartAsync(cancellationToken);
         await batchManagementService.StartAsync(cancellationToken);
         await intentSynchronizationService.StartAsync(cancellationToken);
         await intentGenerationService.StartAsync(cancellationToken);

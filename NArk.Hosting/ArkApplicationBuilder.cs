@@ -6,11 +6,14 @@ using NArk.Abstractions.Contracts;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.VTXOs;
 using NArk.Abstractions.Wallets;
+using NArk.Models.Options;
 using NArk.Services;
 using NArk.Swaps.Abstractions;
 using NArk.Swaps.Boltz.Client;
 using NArk.Swaps.Boltz.Models;
+using NArk.Swaps.Policies;
 using NArk.Swaps.Services;
+using NArk.Sweeper;
 using NArk.Transport;
 using NArk.Transport.GrpcClient;
 
@@ -40,10 +43,22 @@ public class ArkApplicationBuilder : IHostBuilder
             services.AddSingleton<IntentGenerationService>();
             services.AddSingleton<IntentSynchronizationService>();
             services.AddSingleton<BatchManagementService>();
+            services.AddSingleton<SweeperService>();
             services.AddHostedService<ArkHostedLifecycle>();
         });
 
         return new ArkApplicationBuilder(builder);
+    }
+
+    public ArkApplicationBuilder WithSweeperForceRefreshInterval(TimeSpan interval)
+    {
+        _hostBuilder.ConfigureServices(services =>
+            services.Configure<SweeperServiceOptions>(o =>
+            {
+                o.ForceRefreshInterval = interval;
+            }));
+
+        return this;
     }
 
     public ArkApplicationBuilder WithVtxoStorage<TStorage>() where TStorage : class, IVtxoStorage
@@ -192,22 +207,19 @@ public class ArkApplicationBuilder : IHostBuilder
         return this;
     }
 
-    public ArkApplicationBuilder EnableSwaps(string? customBoltzUrl = null, string? customWebsocketUrl = null)
+    public ArkApplicationBuilder EnableSwaps(Action<BoltzClientOptions>? boltzOptionsConfigure = null)
     {
         _hostBuilder.ConfigureServices(services =>
         {
-            if (customBoltzUrl != null)
+            if (boltzOptionsConfigure != null)
             {
-                services.Configure<BoltzClientOptions>(b =>
-                {
-                    b.BoltzUrl = customBoltzUrl;
-                    b.WebsocketUrl = customWebsocketUrl ?? customBoltzUrl;
-                });
+                services.Configure(boltzOptionsConfigure);
             }
 
             services
                 .AddHttpClient<BoltzClient>()
                 .Services.AddSingleton<SwapsManagementService>();
+            services.AddSingleton<ISweepPolicy, SwapSweepPolicy>();
         });
         return this;
     }
