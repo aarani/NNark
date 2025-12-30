@@ -79,12 +79,16 @@ public class SweeperService(
 
     private async Task TrySweepVtxos(IReadOnlyCollection<ArkVtxo> vtxos, CancellationToken cancellationToken)
     {
+        var unspentVtxos = vtxos.Where(v => !v.IsSpent()).ToArray();
         var matchingContracts =
-            await contractStorage.LoadContractsByScripts(vtxos.Select(x => x.Script).ToArray(), cancellationToken);
-        var coins = vtxos.Join(matchingContracts, v => v.Script, c => c.Script,
-                (vtxo, entity) => GetUnspendableCoin(vtxo, entity, _serverInfo!),
-                StringComparer.InvariantCultureIgnoreCase)
-            .ToArray();
+            await contractStorage.LoadContractsByScripts(unspentVtxos.Select(x => x.Script).ToArray(), cancellationToken);
+        var coins =
+            unspentVtxos
+                .Join(matchingContracts, v => v.Script, c => c.Script,
+                    (vtxo, entity) => GetUnspendableCoin(vtxo, entity, _serverInfo!),
+                    StringComparer.InvariantCultureIgnoreCase
+                )
+                .ToArray();
         await ExecutePoliciesAsync(coins);
     }
 
