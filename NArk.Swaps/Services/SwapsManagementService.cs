@@ -369,14 +369,14 @@ public class SwapsManagementService : IAsyncDisposable
                 walletId,
                 ArkSwapType.ReverseSubmarine,
                 revSwap.Swap.Invoice,
-                invoiceParams.Amount.MilliSatoshi / 1000,
+                (long)invoiceParams.Amount.ToUnit(LightMoneyUnit.Satoshi),
                 revSwap.Contract.ToString(),
                 revSwap.Swap.LockupAddress,
                 ArkSwapStatus.Pending,
                 null,
                 DateTimeOffset.UtcNow,
                 DateTimeOffset.UtcNow,
-                Convert.ToHexStringLower(revSwap.Hash)
+                new uint256(revSwap.Hash).ToString()
             ), cancellationToken);
 
         return revSwap.Swap.Invoice;

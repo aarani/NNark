@@ -56,7 +56,7 @@ public class VtxoSynchronizationService : IAsyncDisposable
         }
     }
 
-    private async void OnContractsChanged(object? sender, EventArgs e)
+    private async void OnContractsChanged(object? sender, ArkContractEntity e)
     {
         try
         {
@@ -88,7 +88,7 @@ public class VtxoSynchronizationService : IAsyncDisposable
             HashSet<string> newViewOfScripts = [];
             foreach (var wallet in wallets)
             {
-                var contracts = await _contractStorage.LoadAllContracts(wallet.WalletIdentifier, token);
+                var contracts = await _contractStorage.LoadAllContractsByWallet(wallet.WalletIdentifier, token);
                 newViewOfScripts.UnionWith(contracts.Select(c => c.Script));
             }
 

@@ -46,4 +46,10 @@ public static class OutputDescriptorHelpers
                 throw new ArgumentOutOfRangeException();
         }
     }
+
+    public static string GetFingerprint(OutputDescriptor htlcReceiver)
+    {
+        var metadata = Extract(htlcReceiver);
+        return metadata.WalletId;
+    }
 }

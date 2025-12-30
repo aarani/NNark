@@ -16,6 +16,52 @@ public class SpendingService(
     IClientTransport transport
 ) : ISpendingService
 {
+    public async Task<uint256> Spend(string walletId, ArkPsbtSigner[] inputs, ArkTxOut[] outputs, CancellationToken cancellationToken = default)
+    {
+
+        var serverInfo = await transport.GetServerInfoAsync(cancellationToken);
+
+        var totalInput = inputs.Sum(x => x.Coin.TxOut.Value);
+
+        var outputsSumInSatoshis = outputs.Sum(o => o.Value);
+
+        // Check if any output is explicitly subdust (the user wants to send subdust amount)
+        var hasExplicitSubdustOutput = outputs.Count(o => o.Value < serverInfo.Dust);
+
+        var change = totalInput - outputsSumInSatoshis;
+
+        // Only derive a new change address if we actually need change
+        // This is important for HD wallets as it consumes a derivation index
+        ArkAddress? changeAddress = null;
+        var needsChange = change >= serverInfo.Dust ||
+                          (change > 0L && (hasExplicitSubdustOutput + 1) <= TransactionHelpers.MaxOpReturnOutputs);
+
+        if (needsChange)
+        {
+            // GetDestination uses DerivePaymentContract, which saves the contract to DB
+            changeAddress = (await paymentService.DerivePaymentContract(walletId, cancellationToken)).GetArkAddress();
+        }
+
+        // Add change output if it's at or above the dust threshold
+        if (change >= serverInfo.Dust)
+        {
+            outputs =
+            [
+                ..outputs,
+                new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!)
+            ];
+
+        }
+        else if (change > 0 && (hasExplicitSubdustOutput + 1) <= TransactionHelpers.MaxOpReturnOutputs)
+        {
+            outputs = [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!), .. outputs];
+        }
+
+        var transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(transport);
+
+        return await transactionBuilder.ConstructAndSubmitArkTransaction(inputs, outputs, cancellationToken);
+    }
+
     public async Task<uint256> Spend(string walletId, ArkTxOut[] outputs, CancellationToken cancellationToken = default)
     {
         var serverInfo = await transport.GetServerInfoAsync(cancellationToken);

@@ -20,6 +20,12 @@ public class SimpleSeedWallet(IClientTransport clientTransport, IWalletStorage w
             fingerprint.ToString(), cancellationToken);
     }
 
+    public async Task<string> GetWalletFingerprint(string walletIdentifier, CancellationToken cancellationToken = default)
+    {
+        var wallet = await walletStorage.LoadWallet(walletIdentifier, cancellationToken);
+        return wallet.WalletFingerprint;
+    }
+
     public async Task<ISigningEntity> GetNewSigningEntity(string walletIdentifier,
         CancellationToken cancellationToken = default)
     {

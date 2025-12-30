@@ -26,7 +26,7 @@ public static class TransactionHelpers
                 checkpointGtx.PrecomputeTransactionData([coin.Coin.TxOut]);
 
             receivedCheckpointTx.UpdateFrom(checkpointTx);
-            await coin.SignAndFillPsbt(receivedCheckpointTx, checkpointPrecomputedTransactionData, cancellationToken);
+            await coin.SignAndFillPsbt(receivedCheckpointTx, checkpointPrecomputedTransactionData, cancellationToken: cancellationToken);
 
             return receivedCheckpointTx;
         }
@@ -168,7 +168,7 @@ public static class TransactionHelpers
 
             foreach (var (_, coin) in sortedCheckpointCoins)
             {
-                await coin.SignAndFillPsbt(tx, precomputedTransactionData, cancellationToken);
+                await coin.SignAndFillPsbt(tx, precomputedTransactionData, cancellationToken: cancellationToken);
             }
 
             //reorder the checkpoints to match the order of the inputs of the Ark transaction
@@ -303,7 +303,7 @@ public static class TransactionHelpers
             var precomputedTransactionData =
                 gtx.PrecomputeTransactionData(sortedCheckpointCoins.OrderBy(x => x.Key).Select(x => x.Value).ToArray());
 
-            await signer.SignAndFillPsbt(forfeitTx, precomputedTransactionData, cancellationToken, sighash);
+            await signer.SignAndFillPsbt(forfeitTx, precomputedTransactionData, sighash, cancellationToken);
 
             return forfeitTx;
         }

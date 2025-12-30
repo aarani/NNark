@@ -8,8 +8,8 @@ public record ArkPsbtSigner(ArkCoin Coin, ISigningEntity SigningEntity)
 {
     public async Task SignAndFillPsbt(PSBT psbt,
         TaprootReadyPrecomputedTransactionData precomputedTransactionData,
-        CancellationToken cancellationToken = default,
-        TaprootSigHash sigHash = TaprootSigHash.Default)
+        TaprootSigHash sigHash = TaprootSigHash.Default,
+        CancellationToken cancellationToken = default)
     {
         var psbtInput = Coin.FillPsbtInput(psbt);
 
@@ -23,7 +23,7 @@ public record ArkPsbtSigner(ArkCoin Coin, ISigningEntity SigningEntity)
                 SigHash = sigHash
             });
 
-        var (sig, ourKey) = await SigningEntity.SignData(hash);
+        var (sig, ourKey) = await SigningEntity.SignData(hash, cancellationToken);
 
         psbtInput.SetTaprootScriptSpendSignature(ourKey, Coin.SpendingScript.LeafHash, sig);
     }

@@ -33,8 +33,8 @@ public class SigningService(
     public async Task<ArkPsbtSigner> GetPsbtSigner(ArkVtxo vtxo, CancellationToken cancellationToken = default)
     {
         var serverInfo = await clientTransport.GetServerInfoAsync(cancellationToken);
-        var contract = await contractStorage.LoadContractByScript(vtxo.Script, cancellationToken);
-        if (contract is null)
+        var contracts = await contractStorage.LoadContractsByScripts([vtxo.Script], cancellationToken);
+        if (contracts.SingleOrDefault() is not { } contract)
             throw new UnableToSignUnknownContracts("Could not find contract for vtxo");
         var parsedContract = ArkContract.Parse(contract.Type, contract.AdditionalData, serverInfo.Network);
         if (parsedContract is null)

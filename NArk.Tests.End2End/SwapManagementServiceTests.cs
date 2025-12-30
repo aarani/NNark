@@ -3,10 +3,12 @@ using BTCPayServer.Lightning;
 using CliWrap;
 using CliWrap.Buffered;
 using Microsoft.Extensions.Options;
+using NArk.Models.Options;
 using NArk.Services;
 using NArk.Swaps.Boltz.Client;
 using NArk.Swaps.Boltz.Models;
 using NArk.Swaps.Models;
+using NArk.Swaps.Policies;
 using NArk.Swaps.Services;
 using NArk.Tests.End2End.Common;
 using NArk.Tests.End2End.TestPersistance;
@@ -82,7 +84,7 @@ public class SwapManagementServiceTests
     }
 
     [Test]
-    [Ignore("This test requires sweeping logic, ignoring until that's implemented.")]
+    //    [Ignore("This test requires sweeping logic, ignoring until that's implemented.")]
 
     public async Task CanReceiveArkFundsUsingReverseSwap()
     {
@@ -93,11 +95,17 @@ public class SwapManagementServiceTests
         var boltzClient = new BoltzClient(new HttpClient(),
             new OptionsWrapper<BoltzClientOptions>(new BoltzClientOptions()
             { BoltzUrl = boltzApi.ToString(), WebsocketUrl = boltzWs.ToString() }));
+
+        var spendingService = new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
+            new SigningService(testingPrerequisite.wallet, testingPrerequisite.contracts,
+                testingPrerequisite.clientTransport),
+            testingPrerequisite.contractService, testingPrerequisite.clientTransport);
+        await using var sweepMgr = new SweeperService(testingPrerequisite.wallet, testingPrerequisite.clientTransport,
+            [new SwapSweepPolicy(testingPrerequisite.wallet, swapStorage)], testingPrerequisite.vtxoStorage,
+            testingPrerequisite.contracts, spendingService, new OptionsWrapper<SweeperServiceOptions>(new SweeperServiceOptions() { ForceRefreshInterval = TimeSpan.Zero }));
+        await sweepMgr.StartAsync(CancellationToken.None);
         await using var swapMgr = new SwapsManagementService(
-            new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
-                new SigningService(testingPrerequisite.wallet, testingPrerequisite.contracts,
-                    testingPrerequisite.clientTransport),
-                testingPrerequisite.contractService, testingPrerequisite.clientTransport),
+            spendingService,
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
             testingPrerequisite.wallet,
             swapStorage, testingPrerequisite.contractService, boltzClient);

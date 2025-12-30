@@ -137,7 +137,7 @@ public class IntentGenerationService(
 
         foreach (var signer in inputs)
         {
-            await signer.SignAndFillPsbt(toSignTx, precomputedTransactionData, cancellationToken);
+            await signer.SignAndFillPsbt(toSignTx, precomputedTransactionData, cancellationToken: cancellationToken);
         }
 
         return toSignTx;

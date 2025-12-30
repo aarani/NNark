@@ -19,13 +19,13 @@ public class VtxoSynchronizationServiceTests
 
         walletStorage.LoadAllWallets(Arg.Any<CancellationToken>())
             .Returns(new HashSet<ArkWallet>([new ArkWallet("wallet1", "wallet-fingerprint", [])]));
-        contractStorage.LoadAllContracts("wallet1", Arg.Any<CancellationToken>()).Returns(new HashSet<ArkContractEntity>());
+        contractStorage.LoadAllContractsByWallet("wallet1", Arg.Any<CancellationToken>()).Returns(new HashSet<ArkContractEntity>());
 
         var service = new VtxoSynchronizationService(walletStorage, vtxoStorage, contractStorage, arkClientTransport);
         await service.StartAsync(CancellationToken.None);
 
         walletStorage.Received(1).LoadAllWallets(Arg.Any<CancellationToken>());
-        contractStorage.Received(1).LoadAllContracts(Arg.Is("wallet1"), Arg.Any<CancellationToken>());
+        contractStorage.Received(1).LoadAllContractsByWallet(Arg.Is("wallet1"), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -38,7 +38,7 @@ public class VtxoSynchronizationServiceTests
 
         walletStorage.LoadAllWallets(Arg.Any<CancellationToken>())
             .Returns(new HashSet<ArkWallet>([new ArkWallet("wallet1", "wallet-fingerprint", [])]));
-        contractStorage.LoadAllContracts("wallet1", Arg.Any<CancellationToken>()).Returns(new HashSet<ArkContractEntity>
+        contractStorage.LoadAllContractsByWallet("wallet1", Arg.Any<CancellationToken>()).Returns(new HashSet<ArkContractEntity>
         {
             new(
                 "script1",
@@ -77,7 +77,7 @@ public class VtxoSynchronizationServiceTests
                      new VtxoSynchronizationService(walletStorage, vtxoStorage, contractStorage, arkClientTransport))
             await service.StartAsync(CancellationToken.None);
         _ = walletStorage.Received(1).LoadAllWallets(Arg.Any<CancellationToken>());
-        _ = contractStorage.Received(1).LoadAllContracts(Arg.Is("wallet1"), Arg.Any<CancellationToken>());
+        _ = contractStorage.Received(1).LoadAllContractsByWallet(Arg.Is("wallet1"), Arg.Any<CancellationToken>());
         _ = arkClientTransport.Received(1).GetVtxoByScriptsAsSnapshot(
             Arg.Any<IReadOnlySet<string>>(),
             Arg.Any<CancellationToken>());
@@ -93,7 +93,7 @@ public class VtxoSynchronizationServiceTests
 
         walletStorage.LoadAllWallets(Arg.Any<CancellationToken>())
             .Returns(new HashSet<ArkWallet>([new ArkWallet("wallet1", "wallet-fingerprint", [])]));
-        contractStorage.LoadAllContracts("wallet1", Arg.Any<CancellationToken>()).Returns(new HashSet<ArkContractEntity>
+        contractStorage.LoadAllContractsByWallet("wallet1", Arg.Any<CancellationToken>()).Returns(new HashSet<ArkContractEntity>
         {
             new(
                 "script1",
@@ -142,7 +142,7 @@ public class VtxoSynchronizationServiceTests
             await service.StartAsync(CancellationToken.None);
 
         _ = walletStorage.Received(1).LoadAllWallets(Arg.Any<CancellationToken>());
-        _ = contractStorage.Received(1).LoadAllContracts(Arg.Is("wallet1"), Arg.Any<CancellationToken>());
+        _ = contractStorage.Received(1).LoadAllContractsByWallet(Arg.Is("wallet1"), Arg.Any<CancellationToken>());
         arkClientTransport.Received(2).GetVtxoByScriptsAsSnapshot(
             Arg.Is<IReadOnlySet<string>>(x => x.SetEquals(new List<string> { "script1" })),
             Arg.Any<CancellationToken>());
@@ -158,7 +158,7 @@ public class VtxoSynchronizationServiceTests
 
         walletStorage.LoadAllWallets(Arg.Any<CancellationToken>())
             .Returns(new HashSet<ArkWallet>([new ArkWallet("wallet1", "wallet-fingerprint", [])]));
-        contractStorage.LoadAllContracts("wallet1", Arg.Any<CancellationToken>()).Returns(new HashSet<ArkContractEntity>
+        contractStorage.LoadAllContractsByWallet("wallet1", Arg.Any<CancellationToken>()).Returns(new HashSet<ArkContractEntity>
         {
             new(
                 "script1",
@@ -207,7 +207,7 @@ public class VtxoSynchronizationServiceTests
         {
             await service.StartAsync(CancellationToken.None);
 
-            contractStorage.LoadAllContracts("wallet1", Arg.Any<CancellationToken>()).Returns(new HashSet<ArkContractEntity>
+            contractStorage.LoadAllContractsByWallet("wallet1", Arg.Any<CancellationToken>()).Returns(new HashSet<ArkContractEntity>
             {
                 new(
                     "script1",
@@ -227,13 +227,13 @@ public class VtxoSynchronizationServiceTests
                 )
             });
 
-            contractStorage.ContractsChanged += Raise.Event();
+            contractStorage.ContractsChanged += Raise.Event<EventHandler<ArkContractEntity>>(null, null);
 
             await Task.Delay(1000);
         }
 
         _ = walletStorage.Received(2).LoadAllWallets(Arg.Any<CancellationToken>());
-        _ = contractStorage.Received(2).LoadAllContracts(Arg.Is("wallet1"), Arg.Any<CancellationToken>());
+        _ = contractStorage.Received(2).LoadAllContractsByWallet(Arg.Is("wallet1"), Arg.Any<CancellationToken>());
         arkClientTransport.Received(2).GetVtxoByScriptsAsSnapshot(
             Arg.Is<HashSet<string>>(x => x.SetEquals(new List<string> { "script1" })),
             Arg.Any<CancellationToken>());
