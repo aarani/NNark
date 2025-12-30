@@ -20,7 +20,7 @@ public class SwapManagementServiceTests
 {
     private DistributedApplication _app;
 
-    [OneTimeSetUp]
+    [SetUp]
     public async Task StartDependencies()
     {
         var builder = await DistributedApplicationTestingBuilder
@@ -36,7 +36,7 @@ public class SwapManagementServiceTests
         await Task.Delay(TimeSpan.FromSeconds(5)); //Boltz being boltz.... :(
     }
 
-    [OneTimeTearDown]
+    [TearDown]
     public async Task StopDependencies()
     {
         await _app.StopAsync();
