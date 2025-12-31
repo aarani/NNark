@@ -77,7 +77,7 @@ public class IntentSchedulerTests
             signingService, intentStorage,
             walletDetails.contracts, walletDetails.vtxoStorage, scheduler,
             options);
-        await using var intentSync = new IntentSynchronizationService(intentStorage, walletDetails.clientTransport);
+        await using var intentSync = new IntentSynchronizationService(intentStorage, walletDetails.clientTransport, walletDetails.safetyService);
         await intentGeneration.StartAsync();
         await intentSync.StartAsync();
 

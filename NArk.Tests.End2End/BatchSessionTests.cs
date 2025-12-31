@@ -89,7 +89,7 @@ public class BatchSessionTests
 
 
         await using var intentSync =
-            new IntentSynchronizationService(intentStorage, walletDetails.clientTransport);
+            new IntentSynchronizationService(intentStorage, walletDetails.clientTransport, walletDetails.safetyService);
         await intentSync.StartAsync(CancellationToken.None);
 
         await newSubmittedIntentTcs.Task.WaitAsync(TimeSpan.FromMinutes(1));

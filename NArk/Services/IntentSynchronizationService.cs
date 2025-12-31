@@ -1,12 +1,14 @@
 using System.Threading.Channels;
 using NArk.Abstractions.Intents;
+using NArk.Abstractions.Safety;
 using NArk.Transport;
 
 namespace NArk.Services;
 
 public class IntentSynchronizationService(
     IIntentStorage intentStorage,
-    IClientTransport clientTransport
+    IClientTransport clientTransport,
+    ISafetyService safetyService
 ) : IAsyncDisposable
 {
     private readonly CancellationTokenSource _shutdownCts = new();
@@ -56,14 +58,19 @@ public class IntentSynchronizationService(
 
     private async Task<string> SubmitIntent(ArkIntent intentToSubmit, CancellationToken token)
     {
+        await using var @lock = await safetyService.LockKeyAsync($"intent::{intentToSubmit.InternalId}", token);
+        var intentAfterLock = await intentStorage.GetIntentByInternalId(intentToSubmit.InternalId, token);
+        if (intentAfterLock is null)
+            throw new Exception("Should not happen, intent disappeared from storage mid-action");
+        
         try
         {
             var intentId =
-                await clientTransport.RegisterIntent(intentToSubmit, token);
-
+                await clientTransport.RegisterIntent(intentAfterLock, token);
+            
             await intentStorage.SaveIntent(
-                intentToSubmit.WalletId,
-                intentToSubmit with
+                intentAfterLock.WalletId,
+                intentAfterLock with
                 {
                     IntentId = intentId,
                     State = ArkIntentState.WaitingForBatch,
@@ -74,14 +81,14 @@ public class IntentSynchronizationService(
         }
         catch (AlreadyLockedVtxoException)
         {
-            await clientTransport.DeleteIntent(intentToSubmit, token);
+            await clientTransport.DeleteIntent(intentAfterLock, token);
 
             var intentId =
-                await clientTransport.RegisterIntent(intentToSubmit, token);
+                await clientTransport.RegisterIntent(intentAfterLock, token);
 
             await intentStorage.SaveIntent(
-                intentToSubmit.WalletId,
-                intentToSubmit with
+                intentAfterLock.WalletId,
+                intentAfterLock with
                 {
                     IntentId = intentId,
                     State = ArkIntentState.WaitingForBatch,
