@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using NArk.Abstractions.Batches;
+using NArk.Abstractions.Contracts;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
 using NArk.Abstractions.VTXOs;
@@ -26,6 +27,7 @@ public class BatchManagementService(
     IWallet arkWalletService,
     IClientTransport clientTransport,
     IVtxoStorage vtxoStorage,
+    IContractStorage contractStorage,
     ISigningService signingService,
     ISafetyService safetyService)
     : IAsyncDisposable

@@ -95,8 +95,8 @@ public class BatchSessionTests
         await newSubmittedIntentTcs.Task.WaitAsync(TimeSpan.FromMinutes(1));
 
         await using var batchManager = new BatchManagementService(intentStorage, walletDetails.wallet,
-                         walletDetails.clientTransport, walletDetails.vtxoStorage,
-                         signingService, walletDetails.safetyService);
+            walletDetails.clientTransport, walletDetails.vtxoStorage,
+            walletDetails.contracts, signingService, walletDetails.safetyService);
 
         await batchManager.StartAsync(CancellationToken.None);
 

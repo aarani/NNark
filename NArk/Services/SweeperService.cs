@@ -105,7 +105,7 @@ public class SweeperService(
                 if (!outpointToCoins.TryGetValue(coin.Outpoint, out var priorityQueue))
                     outpointToCoins[coin.Outpoint] = new PriorityQueue<ArkCoin, int>([(coin, 1)]);
                 else
-                    priorityQueue!.Enqueue(coin, priorityQueue.Count);
+                    priorityQueue.Enqueue(coin, priorityQueue.Count);
             }
         }
 

@@ -62,7 +62,7 @@ public class SwapManagementServiceTests
                 testingPrerequisite.contractService, testingPrerequisite.clientTransport, testingPrerequisite.safetyService, intentStorage),
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
             testingPrerequisite.wallet,
-            swapStorage, testingPrerequisite.contractService, testingPrerequisite.safetyService, intentStorage, boltzClient);
+            swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, intentStorage, boltzClient);
 
         var settledSwapTcs = new TaskCompletionSource();
 
@@ -107,7 +107,7 @@ public class SwapManagementServiceTests
             spendingService,
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
             testingPrerequisite.wallet,
-            swapStorage, testingPrerequisite.contractService, testingPrerequisite.safetyService, intentStorage, boltzClient);
+            swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, intentStorage, boltzClient);
 
         var settledSwapTcs = new TaskCompletionSource();
 
@@ -150,7 +150,7 @@ public class SwapManagementServiceTests
                 testingPrerequisite.contractService, testingPrerequisite.clientTransport, testingPrerequisite.safetyService, intentStorage),
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
             testingPrerequisite.wallet,
-            swapStorage, testingPrerequisite.contractService, testingPrerequisite.safetyService, intentStorage, boltzClient);
+            swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, intentStorage, boltzClient);
 
         var refundedSwapTcs = new TaskCompletionSource();
 

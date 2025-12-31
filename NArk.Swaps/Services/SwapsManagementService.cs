@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Threading.Channels;
 using BTCPayServer.Lightning;
 using NArk.Abstractions;
+using NArk.Abstractions.Contracts;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
 using NArk.Abstractions.VTXOs;
@@ -31,6 +32,7 @@ public class SwapsManagementService : IAsyncDisposable
     private readonly IWallet _wallet;
     private readonly ISwapStorage _swapsStorage;
     private readonly IContractService _contractService;
+    private readonly IContractStorage _contractStorage;
     private readonly ISafetyService _safetyService;
     private readonly BoltzSwapService _boltzService;
     private readonly BoltzClient _boltzClient;
@@ -56,6 +58,7 @@ public class SwapsManagementService : IAsyncDisposable
         IWallet wallet,
         ISwapStorage swapsStorage,
         IContractService contractService,
+        IContractStorage contractStorage,
         ISafetyService safetyService,
         IIntentStorage intentStorage,
         BoltzClient boltzClient
@@ -67,6 +70,7 @@ public class SwapsManagementService : IAsyncDisposable
         _wallet = wallet;
         _swapsStorage = swapsStorage;
         _contractService = contractService;
+        _contractStorage = contractStorage;
         _safetyService = safetyService;
         _boltzClient = boltzClient;
         _boltzService = new BoltzSwapService(
@@ -193,7 +197,7 @@ public class SwapsManagementService : IAsyncDisposable
             await _swapsStorage.SaveSwap(swap.WalletId,
                 swapWithNewStatus, cancellationToken: cancellationToken);
 
-            if (swapWithNewStatus.Status is ArkSwapStatus.Settled || swapWithNewStatus.Status is ArkSwapStatus.Refunded)
+            if (swapWithNewStatus.Status is ArkSwapStatus.Settled or ArkSwapStatus.Refunded)
             {
                 _swapAddressToIds.Remove(swapWithNewStatus.SwapId, out _);
                 _swapsIdToWatch.Remove(swapWithNewStatus.SwapId);
@@ -281,10 +285,17 @@ public class SwapsManagementService : IAsyncDisposable
 
         var newSwap =
             swap with { Status = ArkSwapStatus.Refunded, UpdatedAt = DateTimeOffset.Now };
+
         await _swapsStorage.SaveSwap(newSwap.WalletId, newSwap, CancellationToken.None);
 
-        //logger.LogInformation("Successfully refunded submarine swap {SwapId} with Ark txid {ArkTxid}", 
-        //    swap.SwapId, submitResponse.ArkTxid);
+        await using var @lock = await _safetyService.LockKeyAsync($"contract::{contract.GetArkAddress().ScriptPubKey.ToHex()}", CancellationToken.None);
+        var responsibleContract = await _contractStorage.LoadContractsByScripts([contract.GetArkAddress().ScriptPubKey.ToHex()], CancellationToken.None);
+
+        foreach (var arkContractEntity in responsibleContract)
+        {
+            await _contractStorage.SaveContract(arkContractEntity.WalletIdentifier,
+                arkContractEntity with { Important = false }, CancellationToken.None);
+        }
     }
 
     private static ArkSwapStatus Map(string status)
