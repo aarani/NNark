@@ -168,7 +168,7 @@ public class VtxoSynchronizationTests
 
         vtxoStorage.ClearReceivedCalls();
         var spendingService = new SpendingService(vtxoStorage, contracts,
-            new SigningService(wallet, contracts, clientTransport), contractService, clientTransport, safetyService);
+            new SigningService(wallet, contracts, clientTransport), contractService, clientTransport, safetyService, new InMemoryIntentStorage());
 
         await spendingService.Spend("wallet1",
         [

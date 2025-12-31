@@ -43,10 +43,8 @@ public class IntentGenerationService(
         {
             while (!token.IsCancellationRequested)
             {
-                var wallets = (await walletStorage.LoadAllWallets(token)).Select(w => w.WalletIdentifier).ToArray();
-
                 var activeContractsByWallets =
-                    (await contractStorage.LoadActiveContracts(wallets, token))
+                    (await contractStorage.LoadActiveContracts(null, token))
                     .GroupBy(c => c.WalletIdentifier);
 
                 foreach (var activeContractsByWallet in activeContractsByWallets)

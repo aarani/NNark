@@ -3,10 +3,12 @@ using NArk.Abstractions;
 using NArk.Abstractions.Blockchain;
 using NArk.Abstractions.Intents;
 using NArk.Models.Options;
+using NArk.Transport;
+using NBitcoin;
 
 namespace NArk.Services;
 
-public class SimpleIntentScheduler(IContractService contractService, IChainTimeProvider chainTimeProvider, IOptions<SimpleIntentSchedulerOptions> options) : IIntentScheduler
+public class SimpleIntentScheduler(IClientTransport clientTransport, IContractService contractService, IChainTimeProvider chainTimeProvider, IOptions<SimpleIntentSchedulerOptions> options) : IIntentScheduler
 {
     public async Task<IReadOnlyCollection<ArkIntentSpec>> GetIntentsToSubmit(
         IReadOnlyCollection<ArkCoinLite> unspentVtxos, CancellationToken cancellationToken = default)
@@ -17,6 +19,7 @@ public class SimpleIntentScheduler(IContractService contractService, IChainTimeP
 
         if (unspentVtxos.Count == 0) return [];
 
+        var serverInfo = await clientTransport.GetServerInfoAsync(cancellationToken);
         var chainTime = await chainTimeProvider.GetChainTime(cancellationToken);
 
         var coins = unspentVtxos
@@ -28,14 +31,27 @@ public class SimpleIntentScheduler(IContractService contractService, IChainTimeP
 
         foreach (var g in coins)
         {
+            var inputsSumAfterBeforeFees = g.Sum(coin => coin.Amount);
+            var inputsSumAfterAfterFees =
+                inputsSumAfterBeforeFees
+                - (serverInfo.FeeTerms.IntentOffchainInput * g.Count())
+                - serverInfo.FeeTerms.IntentOffchainOutput;
+
+            if (inputsSumAfterAfterFees < Money.Zero)
+                continue;
+            if (inputsSumAfterBeforeFees < serverInfo.Dust)
+                throw new NotImplementedException();
+
+            var outputContract = await contractService.DerivePaymentContract(g.Key, cancellationToken);
+
             intentSpecs.Add(
                 new ArkIntentSpec(
                 g.ToArray(),
                 [
                         new ArkTxOut(
                             ArkTxOutType.Vtxo,
-                            g.Sum(coin => coin.Amount),
-                            (await contractService.DerivePaymentContract(g.Key, cancellationToken)).GetArkAddress()
+                            inputsSumAfterAfterFees,
+                            outputContract.GetArkAddress()
                         )
                     ],
                 DateTimeOffset.UtcNow,

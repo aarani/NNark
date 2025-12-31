@@ -14,6 +14,7 @@ public class SimpleSeedWallet(ISafetyService safetyService, IClientTransport cli
 {
     public async Task CreateNewWallet(string walletIdentifier, CancellationToken cancellationToken = default)
     {
+        await using var @lock = await safetyService.LockKeyAsync($"wallet::{walletIdentifier}", cancellationToken);
         var mnemonic = new Mnemonic(Wordlist.English, WordCount.Twelve);
         var fingerprint = mnemonic.DeriveExtKey().GetPublicKey().GetHDFingerPrint();
         await walletStorage.SaveWallet(walletIdentifier,

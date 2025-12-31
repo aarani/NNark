@@ -12,6 +12,6 @@ public interface IIntentStorage
     public Task<ArkIntent?> GetIntentByIntentId(string walletId, string intentId, CancellationToken cancellationToken = default);
     public Task<IReadOnlyCollection<ArkIntent>> GetIntentsByInputs(string walletId,
         OutPoint[] inputs, bool pendingOnly = true, CancellationToken cancellationToken = default);
-    public Task<IReadOnlyCollection<ArkIntent>> GetUnsubmittedIntents(CancellationToken cancellationToken = default);
+    public Task<IReadOnlyCollection<ArkIntent>> GetUnsubmittedIntents(DateTimeOffset? ValidAt = null, CancellationToken cancellationToken = default);
     public Task<IReadOnlyCollection<ArkIntent>> GetActiveIntents(CancellationToken cancellationToken = default);
 }

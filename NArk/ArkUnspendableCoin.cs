@@ -1,6 +1,5 @@
 using NArk.Contracts;
 using NBitcoin;
-using NBitcoin.Scripting;
 
 namespace NArk;
 

@@ -19,15 +19,15 @@ public class InMemoryIntentStorage : IIntentStorage
             }
             else
                 _intents[walletIdentifier] = new HashSet<ArkIntent>(ArkIntent.InternalIdComparer) { intent };
+        }
 
-            try
-            {
-                IntentChanged?.Invoke(this, intent);
-            }
-            catch
-            {
-                // ignored
-            }
+        try
+        {
+            IntentChanged?.Invoke(this, intent);
+        }
+        catch
+        {
+            // ignored
         }
 
         return Task.CompletedTask;
@@ -73,12 +73,25 @@ public class InMemoryIntentStorage : IIntentStorage
         }
     }
 
-    public Task<IReadOnlyCollection<ArkIntent>> GetUnsubmittedIntents(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyCollection<ArkIntent>> GetUnsubmittedIntents(DateTimeOffset? validAt = null, CancellationToken cancellationToken = default)
     {
         lock (_intents)
         {
-            return Task.FromResult<IReadOnlyCollection<ArkIntent>>(_intents.SelectMany(i =>
-                i.Value.Where(intent => intent is { State: ArkIntentState.WaitingToSubmit, IntentId: null })).ToArray());
+            var allIntents =
+                _intents
+                    .SelectMany(intents =>
+                        intents
+                            .Value
+                            .Where(intent => intent is { State: ArkIntentState.WaitingToSubmit, IntentId: null })
+                    );
+
+            if (validAt is not { } validAtValue)
+                return Task.FromResult<IReadOnlyCollection<ArkIntent>>(allIntents.ToArray());
+
+            return Task.FromResult<IReadOnlyCollection<ArkIntent>>(
+                allIntents.Where(i => i.ValidFrom < validAtValue && i.ValidUntil > validAtValue).ToArray()
+            );
+
         }
     }
 

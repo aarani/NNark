@@ -36,9 +36,14 @@ public class IntentSynchronizationService(
             {
                 token.ThrowIfCancellationRequested();
 
-                var intentsToSubmit = await intentStorage.GetUnsubmittedIntents(token);
+                var intentsToSubmit = await intentStorage.GetUnsubmittedIntents(DateTimeOffset.UtcNow, token);
                 foreach (var intentToSubmit in intentsToSubmit)
                 {
+                    // In case storage did not respect our wish...
+                    if (intentToSubmit.ValidFrom > DateTimeOffset.UtcNow ||
+                            intentToSubmit.ValidUntil < DateTimeOffset.UtcNow)
+                        continue;
+
                     await SubmitIntent(intentToSubmit, token);
                 }
             }

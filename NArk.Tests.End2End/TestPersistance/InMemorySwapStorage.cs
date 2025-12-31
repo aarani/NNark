@@ -18,9 +18,10 @@ public class InMemorySwapStorage : ISwapStorage
                 swaps.Add(swap);
             else
                 _swaps[walletId] = [swap];
-            // BEWARE: can this cause infinite loop?
-            SwapsChanged?.Invoke(this, swap);
         }
+
+        // BEWARE: can this cause infinite loop?
+        SwapsChanged?.Invoke(this, swap);
 
         return Task.CompletedTask;
     }

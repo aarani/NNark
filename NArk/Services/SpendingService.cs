@@ -1,5 +1,6 @@
 using NArk.Abstractions;
 using NArk.Abstractions.Contracts;
+using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
 using NArk.Abstractions.VTXOs;
 using NArk.Helpers;
@@ -15,7 +16,8 @@ public class SpendingService(
     ISigningService signingService,
     IContractService paymentService,
     IClientTransport transport,
-    ISafetyService safetyService
+    ISafetyService safetyService,
+    IIntentStorage intentStorage
 ) : ISpendingService
 {
     public async Task<uint256> Spend(string walletId, ArkPsbtSigner[] inputs, ArkTxOut[] outputs, CancellationToken cancellationToken = default)
@@ -58,7 +60,7 @@ public class SpendingService(
             outputs = [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!), .. outputs];
         }
 
-        var transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(transport, safetyService);
+        var transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(transport, safetyService, intentStorage);
 
         return await transactionBuilder.ConstructAndSubmitArkTransaction(inputs, outputs, cancellationToken);
     }
@@ -133,7 +135,7 @@ public class SpendingService(
             outputs = [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!), .. outputs];
         }
 
-        var transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(transport, safetyService);
+        var transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(transport, safetyService, intentStorage);
 
         return await transactionBuilder.ConstructAndSubmitArkTransaction(selectedCoins, outputs, cancellationToken);
     }

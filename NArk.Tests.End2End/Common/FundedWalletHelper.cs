@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using Aspire.Hosting;
 using CliWrap;
 using CliWrap.Buffered;

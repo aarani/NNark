@@ -4,7 +4,6 @@ using NArk.Abstractions.Wallets;
 using NArk.Contracts;
 using NArk.Transactions;
 using NArk.Transport;
-using NBitcoin;
 
 namespace NArk.Services;
 

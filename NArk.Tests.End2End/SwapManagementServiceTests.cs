@@ -54,14 +54,15 @@ public class SwapManagementServiceTests
         var boltzClient = new BoltzClient(new HttpClient(),
             new OptionsWrapper<BoltzClientOptions>(new BoltzClientOptions()
             { BoltzUrl = boltzApi.ToString(), WebsocketUrl = boltzWs.ToString() }));
+        var intentStorage = new InMemoryIntentStorage();
         await using var swapMgr = new SwapsManagementService(
             new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
                 new SigningService(testingPrerequisite.wallet, testingPrerequisite.contracts,
                     testingPrerequisite.clientTransport),
-                testingPrerequisite.contractService, testingPrerequisite.clientTransport, testingPrerequisite.safetyService),
+                testingPrerequisite.contractService, testingPrerequisite.clientTransport, testingPrerequisite.safetyService, intentStorage),
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
             testingPrerequisite.wallet,
-            swapStorage, testingPrerequisite.contractService, testingPrerequisite.safetyService, boltzClient);
+            swapStorage, testingPrerequisite.contractService, testingPrerequisite.safetyService, intentStorage, boltzClient);
 
         var settledSwapTcs = new TaskCompletionSource();
 
@@ -95,11 +96,11 @@ public class SwapManagementServiceTests
         var boltzClient = new BoltzClient(new HttpClient(),
             new OptionsWrapper<BoltzClientOptions>(new BoltzClientOptions()
             { BoltzUrl = boltzApi.ToString(), WebsocketUrl = boltzWs.ToString() }));
-
+        var intentStorage = new InMemoryIntentStorage();
         var spendingService = new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
             new SigningService(testingPrerequisite.wallet, testingPrerequisite.contracts,
                 testingPrerequisite.clientTransport),
-            testingPrerequisite.contractService, testingPrerequisite.clientTransport, testingPrerequisite.safetyService);
+            testingPrerequisite.contractService, testingPrerequisite.clientTransport, testingPrerequisite.safetyService, intentStorage);
         await using var sweepMgr = new SweeperService(testingPrerequisite.wallet, testingPrerequisite.clientTransport,
             [new SwapSweepPolicy(testingPrerequisite.wallet, swapStorage)], testingPrerequisite.vtxoStorage,
             testingPrerequisite.contracts, spendingService, new OptionsWrapper<SweeperServiceOptions>(new SweeperServiceOptions() { ForceRefreshInterval = TimeSpan.Zero }));
@@ -108,7 +109,7 @@ public class SwapManagementServiceTests
             spendingService,
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
             testingPrerequisite.wallet,
-            swapStorage, testingPrerequisite.contractService, testingPrerequisite.safetyService, boltzClient);
+            swapStorage, testingPrerequisite.contractService, testingPrerequisite.safetyService, intentStorage, boltzClient);
 
         var settledSwapTcs = new TaskCompletionSource();
 
@@ -143,14 +144,15 @@ public class SwapManagementServiceTests
         var boltzClient = new BoltzClient(new HttpClient(),
             new OptionsWrapper<BoltzClientOptions>(new BoltzClientOptions()
             { BoltzUrl = boltzApi.ToString(), WebsocketUrl = boltzWs.ToString() }));
+        var intentStorage = new InMemoryIntentStorage();
         await using var swapMgr = new SwapsManagementService(
             new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
                 new SigningService(testingPrerequisite.wallet, testingPrerequisite.contracts,
                     testingPrerequisite.clientTransport),
-                testingPrerequisite.contractService, testingPrerequisite.clientTransport, testingPrerequisite.safetyService),
+                testingPrerequisite.contractService, testingPrerequisite.clientTransport, testingPrerequisite.safetyService, intentStorage),
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
             testingPrerequisite.wallet,
-            swapStorage, testingPrerequisite.contractService, testingPrerequisite.safetyService, boltzClient);
+            swapStorage, testingPrerequisite.contractService, testingPrerequisite.safetyService, intentStorage, boltzClient);
 
         var refundedSwapTcs = new TaskCompletionSource();
 

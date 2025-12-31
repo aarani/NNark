@@ -1,4 +1,5 @@
 using NArk.Abstractions;
+using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
 using NArk.Contracts;
 using NArk.Models;
@@ -18,7 +19,8 @@ public static class TransactionHelpers
     /// </summary>
     public class ArkTransactionBuilder(
         IClientTransport clientTransport,
-        ISafetyService safetyService)
+        ISafetyService safetyService,
+        IIntentStorage intentStorage)
     {
         private async Task<PSBT> FinalizeCheckpointTx(PSBT checkpointTx, PSBT receivedCheckpointTx, ArkPsbtSigner coin,
             CancellationToken cancellationToken)
@@ -259,6 +261,26 @@ public static class TransactionHelpers
             var (arkTx, checkpoints) =
                 await ConstructArkTransaction(arkCoins, [.. arkOutputs], serverInfo, cancellationToken);
             await SubmitArkTransaction(arkCoins, arkTx, checkpoints, cancellationToken);
+
+            foreach (var spentCoins in arkCoins.GroupBy(c => c.Coin.WalletIdentifier))
+            {
+                var intents =
+                    await intentStorage.GetIntentsByInputs(
+                        spentCoins.Key,
+                        [.. spentCoins.Select(c => c.Coin.Outpoint)],
+                        true,
+                        CancellationToken.None
+                    );
+                foreach (var intent in intents)
+                {
+                    await using var @lock = await safetyService.LockKeyAsync($"intent::{intent.InternalId}", CancellationToken.None);
+                    var intentAfterLock =
+                        await intentStorage.GetIntentByInternalId(intent.InternalId, CancellationToken.None)
+                        ?? throw new Exception("Should not happen, intent disappeared from storage mid-action");
+                    await intentStorage.SaveIntent(intentAfterLock.WalletId, intentAfterLock with { State = ArkIntentState.Cancelled }, CancellationToken.None);
+                }
+            }
+
             return arkTx.GetGlobalTransaction().GetHash();
         }
 

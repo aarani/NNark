@@ -358,7 +358,7 @@ public class BatchManagementService(
                 // Create and initialize a batch session
                 var session = new BatchSession(
                     clientTransport,
-                    new TransactionHelpers.ArkTransactionBuilder(clientTransport, safetyService),
+                    new TransactionHelpers.ArkTransactionBuilder(clientTransport, safetyService, intentStorage),
                     serverInfo.Network,
                     signer,
                     intent,

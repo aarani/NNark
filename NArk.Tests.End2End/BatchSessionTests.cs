@@ -43,13 +43,15 @@ public class BatchSessionTests
     {
         var walletDetails = await FundedWalletHelper.GetFundedWallet(_app);
 
+
+        var intentStorage = new InMemoryIntentStorage();
+
         // The threshold is so high, it will force an intent generation
-        var scheduler = new SimpleIntentScheduler(walletDetails.contractService,
+        var scheduler = new SimpleIntentScheduler(walletDetails.clientTransport, walletDetails.contractService,
             new ChainTimeProvider(Network.RegTest, _app.GetEndpoint("nbxplorer", "http")),
             new OptionsWrapper<SimpleIntentSchedulerOptions>(new SimpleIntentSchedulerOptions()
             { Threshold = TimeSpan.FromHours(2), ThresholdHeight = 2000 }));
 
-        var intentStorage = new InMemoryIntentStorage();
         var newIntentTcs = new TaskCompletionSource();
         var newSubmittedIntentTcs = new TaskCompletionSource();
         var newSuccessBatch = new TaskCompletionSource();

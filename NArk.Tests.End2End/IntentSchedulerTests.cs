@@ -42,7 +42,7 @@ public class IntentSchedulerTests
         var walletDetails = await FundedWalletHelper.GetFundedWallet(_app);
 
         // The threshold is so high, it will force an intent generation
-        var scheduler = new SimpleIntentScheduler(walletDetails.contractService,
+        var scheduler = new SimpleIntentScheduler(walletDetails.clientTransport, walletDetails.contractService,
             new ChainTimeProvider(Network.RegTest, _app.GetEndpoint("nbxplorer", "http")),
             new OptionsWrapper<SimpleIntentSchedulerOptions>(new SimpleIntentSchedulerOptions()
             { Threshold = TimeSpan.FromHours(2), ThresholdHeight = 2000 }));
