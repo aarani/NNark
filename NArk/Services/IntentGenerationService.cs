@@ -70,7 +70,26 @@ public class IntentGenerationService(
 
                     foreach (var intentSpec in intentSpecs)
                     {
-                        var overlappingIntents = await intentStorage.GetIntentsByInputs(activeContractsByWallet.Key, [.. intentSpec.Coins.Select(c => c.Outpoint)], true, token);
+                        var outputsSum = intentSpec.Outputs.Sum(o => o.Value);
+                        var inputsSum = intentSpec.Coins.Sum(c => c.Amount);
+                        var onchainOutputCount =
+                            intentSpec.Outputs.Count(o => o.Type == ArkTxOutType.Onchain);
+                        var offchainOutputCount =
+                            intentSpec.Outputs.Count(o => o.Type == ArkTxOutType.Vtxo);
+                        var inputsCount = intentSpec.Coins.Length;
+                        // TODO: OnchainInput should be considered when we add utxo onboarding
+                        var fee = (inputsCount * serverInfo.FeeTerms.IntentOffchainInput) +
+                                  (offchainOutputCount * serverInfo.FeeTerms.IntentOffchainOutput) +
+                                  (onchainOutputCount * serverInfo.FeeTerms.IntentOnchainOutput);
+
+                        if (outputsSum < inputsSum + fee)
+                        {
+                            throw new InvalidOperationException(
+                                $"Scheduler is not considering fees properly, missing fees by {inputsSum + fee - outputsSum} sats");
+                        }
+
+                        var overlappingIntents =
+                            await intentStorage.GetIntentsByInputs(activeContractsByWallet.Key, [.. intentSpec.Coins.Select(c => c.Outpoint)], true, token);
                         if (overlappingIntents.Count != 0)
                             continue;
 

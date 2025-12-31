@@ -85,8 +85,6 @@ public class SwapManagementServiceTests
     }
 
     [Test]
-    //    [Ignore("This test requires sweeping logic, ignoring until that's implemented.")]
-
     public async Task CanReceiveArkFundsUsingReverseSwap()
     {
         var boltzApi = _app.GetEndpoint("boltz", "api");
