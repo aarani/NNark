@@ -20,7 +20,7 @@ public static class OutputDescriptorHelpers
                 Convert.ToHexStringLower(XOnlyPubKey.ToBytes());
     };
 
-    public static OutputDescriptorMetadata Extract(OutputDescriptor descriptor)
+    public static OutputDescriptorMetadata Extract(this OutputDescriptor descriptor)
     {
         if (descriptor is not OutputDescriptor.Tr trOutputDescriptor)
         {

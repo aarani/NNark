@@ -62,12 +62,12 @@ public class IntentSynchronizationService(
         var intentAfterLock = await intentStorage.GetIntentByInternalId(intentToSubmit.InternalId, token);
         if (intentAfterLock is null)
             throw new Exception("Should not happen, intent disappeared from storage mid-action");
-        
+
         try
         {
             var intentId =
                 await clientTransport.RegisterIntent(intentAfterLock, token);
-            
+
             await intentStorage.SaveIntent(
                 intentAfterLock.WalletId,
                 intentAfterLock with
