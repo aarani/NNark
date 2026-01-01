@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using NArk.Abstractions.Blockchain;
 using NArk.Abstractions.Contracts;
@@ -7,6 +8,7 @@ using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
 using NArk.Abstractions.VTXOs;
 using NArk.Abstractions.Wallets;
+using NArk.Events;
 using NArk.Models.Options;
 using NArk.Services;
 using NArk.Swaps.Abstractions;
@@ -110,7 +112,18 @@ public static class AppExtensions
             _hostBuilder.ConfigureServices(services => { services.AddSingleton<IChainTimeProvider, TTime>(); });
             return this;
         }
-
+        
+        public ArkApplicationBuilder WithEventHandler<TEvent, THandler>()
+            where TEvent : class
+            where THandler : class, IEventHandler<TEvent>
+        {
+            _hostBuilder.ConfigureServices(services =>
+            {
+                services.AddTransient<IEventHandler<TEvent>, THandler>();
+            });
+            return this;
+        }
+        
         public ArkApplicationBuilder OnMainnet()
         {
             _hostBuilder.ConfigureServices(services =>

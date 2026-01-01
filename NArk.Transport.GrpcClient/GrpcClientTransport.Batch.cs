@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Grpc.Core;
 using NArk.Abstractions.Batches;
+using NArk.Abstractions.Batches.ServerEvents;
 
 namespace NArk.Transport.GrpcClient;
 

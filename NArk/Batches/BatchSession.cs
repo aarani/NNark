@@ -1,5 +1,6 @@
 using System.Text.Json;
 using NArk.Abstractions.Batches;
+using NArk.Abstractions.Batches.ServerEvents;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.Wallets;
 using NArk.Helpers;

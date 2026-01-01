@@ -4,6 +4,9 @@ using NArk.Abstractions.Contracts;
 using NArk.Abstractions.VTXOs;
 using NArk.Abstractions.Wallets;
 using NArk.Contracts;
+using NArk.Enums;
+using NArk.Events;
+using NArk.Extensions;
 using NArk.Models.Options;
 using NArk.Sweeper;
 using NArk.Transactions;
@@ -19,15 +22,24 @@ public class SweeperService(
     IVtxoStorage vtxoStorage,
     IContractStorage contractStorage,
     ISpendingService spendingService,
-    IOptions<SweeperServiceOptions> options
-) : IAsyncDisposable
+    IOptions<SweeperServiceOptions> options,
+    IEnumerable<IEventHandler<PostSweepActionEvent>> postSweepHandlers) : IAsyncDisposable
 {
+    public SweeperService(
+        IWallet wallet,
+        IClientTransport clientTransport,
+        IEnumerable<ISweepPolicy> policies,
+        IVtxoStorage vtxoStorage,
+        IContractStorage contractStorage,
+        ISpendingService spendingService,
+        IOptions<SweeperServiceOptions> options)
+            : this(wallet, clientTransport, policies, vtxoStorage, contractStorage, spendingService, options, [])
+    {
+    }
+
     private record SweepJobTrigger;
-
     private record SweepTimerTrigger : SweepJobTrigger;
-
     private record SweepVtxoTrigger(IReadOnlyCollection<ArkVtxo> Vtxos) : SweepJobTrigger;
-
     private record SweepContractTrigger(IReadOnlyCollection<ArkContractEntity> Contracts) : SweepJobTrigger;
 
     private readonly CancellationTokenSource _shutdownCts = new();
@@ -81,7 +93,8 @@ public class SweeperService(
     {
         var unspentVtxos = vtxos.Where(v => !v.IsSpent()).ToArray();
         var matchingContracts =
-            await contractStorage.LoadContractsByScripts(unspentVtxos.Select(x => x.Script).ToArray(), cancellationToken);
+            await contractStorage.LoadContractsByScripts(unspentVtxos.Select(x => x.Script).ToArray(),
+                cancellationToken);
         var coins =
             unspentVtxos
                 .Join(matchingContracts, v => v.Script, c => c.Script,
@@ -123,19 +136,25 @@ public class SweeperService(
                 var psbtSigner = new ArkPsbtSigner(possiblePath, signer);
                 try
                 {
-                    await spendingService.Spend(possiblePath.WalletIdentifier, [psbtSigner], [],
+                    var txId = await spendingService.Spend(possiblePath.WalletIdentifier, [psbtSigner], [],
                         CancellationToken.None);
+                    await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(psbtSigner.Coin, txId,
+                        ActionState.Successful, null));
                     break;
                 }
                 catch (AlreadyLockedVtxoException)
                 {
+                    await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(psbtSigner.Coin, null,
+                        ActionState.Failed, "Vtxo is already locked by another process."));
                     break;
                 }
-                catch
+                catch (Exception ex)
                 {
                     if (possiblePaths.Count == 0)
                     {
-                        // TODO: log exception as all paths failed.
+                        await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(psbtSigner.Coin, null,
+                            ActionState.Failed, $"All sweeping paths failed, ex: {ex}"));
+                        //TODO: log
                     }
                 }
             }

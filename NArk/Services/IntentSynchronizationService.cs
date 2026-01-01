@@ -1,6 +1,9 @@
 using System.Threading.Channels;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
+using NArk.Enums;
+using NArk.Events;
+using NArk.Extensions;
 using NArk.Transport;
 
 namespace NArk.Services;
@@ -8,9 +11,17 @@ namespace NArk.Services;
 public class IntentSynchronizationService(
     IIntentStorage intentStorage,
     IClientTransport clientTransport,
-    ISafetyService safetyService
-) : IAsyncDisposable
+    ISafetyService safetyService,
+    IEnumerable<IEventHandler<PostIntentSubmissionEvent>> eventHandlers) : IAsyncDisposable
 {
+
+    public IntentSynchronizationService(IIntentStorage intentStorage,
+        IClientTransport clientTransport,
+        ISafetyService safetyService) : this(intentStorage, clientTransport, safetyService, [])
+    {
+        
+    }
+    
     private readonly CancellationTokenSource _shutdownCts = new();
 
     private readonly Channel<string> _submitTriggerChannel = Channel.CreateUnbounded<string>();
@@ -65,37 +76,57 @@ public class IntentSynchronizationService(
 
         try
         {
-            var intentId =
-                await clientTransport.RegisterIntent(intentAfterLock, token);
+            try
+            {
+                var intentId =
+                    await clientTransport.RegisterIntent(intentAfterLock, token);
 
-            await intentStorage.SaveIntent(
-                intentAfterLock.WalletId,
-                intentAfterLock with
-                {
-                    IntentId = intentId,
-                    State = ArkIntentState.WaitingForBatch,
-                    UpdatedAt = DateTimeOffset.UtcNow
-                }, token);
+                var now = DateTimeOffset.UtcNow;
 
-            return intentId;
+                await intentStorage.SaveIntent(
+                    intentAfterLock.WalletId,
+                    intentAfterLock with
+                    {
+                        IntentId = intentId,
+                        State = ArkIntentState.WaitingForBatch,
+                        UpdatedAt = now
+                    }, token);
+
+                await eventHandlers.SafeHandleEventAsync(new PostIntentSubmissionEvent(intentAfterLock, now, true,
+                    ActionState.Successful, null), token);
+
+                return intentId;
+            }
+            catch (AlreadyLockedVtxoException)
+            {
+                await clientTransport.DeleteIntent(intentAfterLock, token);
+
+                var intentId =
+                    await clientTransport.RegisterIntent(intentAfterLock, token);
+
+                var now = DateTimeOffset.UtcNow;
+
+                await intentStorage.SaveIntent(
+                    intentAfterLock.WalletId,
+                    intentAfterLock with
+                    {
+                        IntentId = intentId,
+                        State = ArkIntentState.WaitingForBatch,
+                        UpdatedAt = now
+                    }, token);
+
+                await eventHandlers.SafeHandleEventAsync(new PostIntentSubmissionEvent(intentAfterLock, now, false,
+                    ActionState.Successful, null), token);
+
+                return intentId;
+            }
         }
-        catch (AlreadyLockedVtxoException)
+        catch (Exception ex)
         {
-            await clientTransport.DeleteIntent(intentAfterLock, token);
+            await eventHandlers.SafeHandleEventAsync(new PostIntentSubmissionEvent(intentAfterLock, DateTimeOffset.UtcNow, false,
+                ActionState.Failed, $"Intent submission failed with ex: {ex}"), token);
 
-            var intentId =
-                await clientTransport.RegisterIntent(intentAfterLock, token);
-
-            await intentStorage.SaveIntent(
-                intentAfterLock.WalletId,
-                intentAfterLock with
-                {
-                    IntentId = intentId,
-                    State = ArkIntentState.WaitingForBatch,
-                    UpdatedAt = DateTimeOffset.UtcNow
-                }, token);
-
-            return intentId;
+            throw;
         }
     }
 
@@ -115,4 +146,6 @@ public class IntentSynchronizationService(
             // ignored
         }
     }
+
+    
 }

@@ -3,6 +3,9 @@ using NArk.Abstractions.Contracts;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
 using NArk.Abstractions.VTXOs;
+using NArk.Enums;
+using NArk.Events;
+using NArk.Extensions;
 using NArk.Helpers;
 using NArk.Transactions;
 using NArk.Transport;
@@ -17,52 +20,79 @@ public class SpendingService(
     IContractService paymentService,
     IClientTransport transport,
     ISafetyService safetyService,
-    IIntentStorage intentStorage
-) : ISpendingService
+    IIntentStorage intentStorage,
+    IEnumerable<IEventHandler<PostCoinsSpendActionEvent>> postSpendEventHandlers) : ISpendingService
 {
+    
+    public SpendingService(IVtxoStorage vtxoStorage,
+        IContractStorage contractStorage,
+        ISigningService signingService,
+        IContractService paymentService,
+        IClientTransport transport,
+        ISafetyService safetyService,
+        IIntentStorage intentStorage) 
+        : this(vtxoStorage, contractStorage, signingService, paymentService, transport, safetyService, intentStorage, [])
+    {
+    }
+    
     public async Task<uint256> Spend(string walletId, ArkPsbtSigner[] inputs, ArkTxOut[] outputs, CancellationToken cancellationToken = default)
     {
-        var serverInfo = await transport.GetServerInfoAsync(cancellationToken);
-
-        var totalInput = inputs.Sum(x => x.Coin.TxOut.Value);
-
-        var outputsSumInSatoshis = outputs.Sum(o => o.Value);
-
-        // Check if any output is explicitly subdust (the user wants to send subdust amount)
-        var hasExplicitSubdustOutput = outputs.Count(o => o.Value < serverInfo.Dust);
-
-        var change = totalInput - outputsSumInSatoshis;
-
-        // Only derive a new change address if we actually need change
-        // This is important for HD wallets as it consumes a derivation index
-        ArkAddress? changeAddress = null;
-        var needsChange = change >= serverInfo.Dust ||
-                          (change > 0L && (hasExplicitSubdustOutput + 1) <= TransactionHelpers.MaxOpReturnOutputs);
-
-        if (needsChange)
+        try
         {
-            // GetDestination uses DerivePaymentContract, which saves the contract to DB
-            changeAddress = (await paymentService.DerivePaymentContract(walletId, cancellationToken)).GetArkAddress();
-        }
+            var serverInfo = await transport.GetServerInfoAsync(cancellationToken);
 
-        // Add change output if it's at or above the dust threshold
-        if (change >= serverInfo.Dust)
+            var totalInput = inputs.Sum(x => x.Coin.TxOut.Value);
+
+            var outputsSumInSatoshis = outputs.Sum(o => o.Value);
+
+            // Check if any output is explicitly subdust (the user wants to send subdust amount)
+            var hasExplicitSubdustOutput = outputs.Count(o => o.Value < serverInfo.Dust);
+
+            var change = totalInput - outputsSumInSatoshis;
+
+            // Only derive a new change address if we actually need change
+            // This is important for HD wallets as it consumes a derivation index
+            ArkAddress? changeAddress = null;
+            var needsChange = change >= serverInfo.Dust ||
+                              (change > 0L && (hasExplicitSubdustOutput + 1) <= TransactionHelpers.MaxOpReturnOutputs);
+
+            if (needsChange)
+            {
+                // GetDestination uses DerivePaymentContract, which saves the contract to DB
+                changeAddress = (await paymentService.DerivePaymentContract(walletId, cancellationToken)).GetArkAddress();
+            }
+
+            // Add change output if it's at or above the dust threshold
+            if (change >= serverInfo.Dust)
+            {
+                outputs =
+                [
+                    ..outputs,
+                    new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!)
+                ];
+
+            }
+            else if (change > 0 && (hasExplicitSubdustOutput + 1) <= TransactionHelpers.MaxOpReturnOutputs)
+            {
+                outputs = [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!), .. outputs];
+            }
+
+            var transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(transport, safetyService, intentStorage);
+
+            var txId = await transactionBuilder.ConstructAndSubmitArkTransaction(inputs, outputs, cancellationToken);
+            
+            await postSpendEventHandlers.SafeHandleEventAsync(new PostCoinsSpendActionEvent(inputs.Select(i => i.Coin).ToArray(), txId,
+                ActionState.Successful, null), cancellationToken: cancellationToken);
+
+            return txId;
+        }
+        catch (Exception ex)
         {
-            outputs =
-            [
-                ..outputs,
-                new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!)
-            ];
+            await postSpendEventHandlers.SafeHandleEventAsync(new PostCoinsSpendActionEvent(inputs.Select(i => i.Coin).ToArray(), null,
+                ActionState.Failed, $"Spending coins failed with ex: {ex}"), cancellationToken: cancellationToken);
 
+            throw;
         }
-        else if (change > 0 && (hasExplicitSubdustOutput + 1) <= TransactionHelpers.MaxOpReturnOutputs)
-        {
-            outputs = [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!), .. outputs];
-        }
-
-        var transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(transport, safetyService, intentStorage);
-
-        return await transactionBuilder.ConstructAndSubmitArkTransaction(inputs, outputs, cancellationToken);
     }
 
     public async Task<uint256> Spend(string walletId, ArkTxOut[] outputs, CancellationToken cancellationToken = default)
@@ -105,38 +135,53 @@ public class SpendingService(
         var selectedCoins = CoinSelectionHelper.SelectCoins([.. coins], outputsSumInSatoshis, serverInfo.Dust,
             hasExplicitSubdustOutput);
 
-        var totalInput = selectedCoins.Sum(x => x.Coin.TxOut.Value);
-        var change = totalInput - outputsSumInSatoshis;
-
-        // Only derive a new change address if we actually need change
-        // This is important for HD wallets as it consumes a derivation index
-        ArkAddress? changeAddress = null;
-        var needsChange = change >= serverInfo.Dust ||
-                          (change > 0L && (hasExplicitSubdustOutput + 1) <= TransactionHelpers.MaxOpReturnOutputs);
-
-        if (needsChange)
+        try
         {
-            // GetDestination uses DerivePaymentContract, which saves the contract to DB
-            changeAddress = (await paymentService.DerivePaymentContract(walletId, cancellationToken)).GetArkAddress();
-        }
+            var totalInput = selectedCoins.Sum(x => x.Coin.TxOut.Value);
+            var change = totalInput - outputsSumInSatoshis;
 
-        // Add change output if it's at or above the dust threshold
-        if (change >= serverInfo.Dust)
+            // Only derive a new change address if we actually need change
+            // This is important for HD wallets as it consumes a derivation index
+            ArkAddress? changeAddress = null;
+            var needsChange = change >= serverInfo.Dust ||
+                              (change > 0L && (hasExplicitSubdustOutput + 1) <= TransactionHelpers.MaxOpReturnOutputs);
+
+            if (needsChange)
+            {
+                // GetDestination uses DerivePaymentContract, which saves the contract to DB
+                changeAddress = (await paymentService.DerivePaymentContract(walletId, cancellationToken)).GetArkAddress();
+            }
+
+            // Add change output if it's at or above the dust threshold
+            if (change >= serverInfo.Dust)
+            {
+                outputs =
+                [
+                    ..outputs,
+                    new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!)
+                ];
+
+            }
+            else if (change > 0 && (hasExplicitSubdustOutput + 1) <= TransactionHelpers.MaxOpReturnOutputs)
+            {
+                outputs = [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!), .. outputs];
+            }
+
+            var transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(transport, safetyService, intentStorage);
+
+            var txId = await transactionBuilder.ConstructAndSubmitArkTransaction(selectedCoins, outputs, cancellationToken);
+            
+            await postSpendEventHandlers.SafeHandleEventAsync(new PostCoinsSpendActionEvent(coins.Select(i => i.Coin).ToArray(), txId,
+                ActionState.Successful, null), cancellationToken: cancellationToken);
+
+            return txId;
+        }
+        catch (Exception ex)
         {
-            outputs =
-            [
-                ..outputs,
-                new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!)
-            ];
+            await postSpendEventHandlers.SafeHandleEventAsync(new PostCoinsSpendActionEvent(coins.Select(i => i.Coin).ToArray(), null,
+                ActionState.Failed, $"Spending selected coins failed with ex: {ex}"), cancellationToken: cancellationToken);
 
+            throw;
         }
-        else if (change > 0 && (hasExplicitSubdustOutput + 1) <= TransactionHelpers.MaxOpReturnOutputs)
-        {
-            outputs = [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!), .. outputs];
-        }
-
-        var transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(transport, safetyService, intentStorage);
-
-        return await transactionBuilder.ConstructAndSubmitArkTransaction(selectedCoins, outputs, cancellationToken);
     }
 }

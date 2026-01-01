@@ -1,4 +1,5 @@
 using NArk.Abstractions.Batches;
+using NArk.Abstractions.Batches.ServerEvents;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.VTXOs;
 using NArk.Transport.Models;

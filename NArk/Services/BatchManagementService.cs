@@ -4,12 +4,14 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using NArk.Abstractions.Batches;
-using NArk.Abstractions.Contracts;
+using NArk.Abstractions.Batches.ServerEvents;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
 using NArk.Abstractions.VTXOs;
 using NArk.Abstractions.Wallets;
 using NArk.Batches;
+using NArk.Enums;
+using NArk.Events;
 using NArk.Extensions;
 using NArk.Helpers;
 using NArk.Models;
@@ -28,7 +30,8 @@ public class BatchManagementService(
     IClientTransport clientTransport,
     IVtxoStorage vtxoStorage,
     ISigningService signingService,
-    ISafetyService safetyService)
+    ISafetyService safetyService,
+    IEnumerable<IEventHandler<PostBatchSessionEvent>> eventHandlers)
     : IAsyncDisposable
 {
     private record BatchSessionWithConnectionId(
@@ -97,7 +100,6 @@ public class BatchManagementService(
                     newCts
                 );
                 _isReservedConnections[connectionId] = false;
-
             }
             finally
             {
@@ -118,7 +120,8 @@ public class BatchManagementService(
         }
     }
 
-    private async Task SaveToStorage(string intentId, Func<ArkIntent?, ArkIntent> updateFunc, CancellationToken cancellationToken = default)
+    private async Task SaveToStorage(string intentId, Func<ArkIntent?, ArkIntent> updateFunc,
+        CancellationToken cancellationToken = default)
     {
         var newValue = _activeIntents.AddOrUpdate(intentId, _ => updateFunc(null), (_, old) => updateFunc(old));
         await intentStorage.SaveIntent(newValue.WalletId, newValue, cancellationToken);
@@ -144,7 +147,8 @@ public class BatchManagementService(
                 // If we have no topic to listen for, jump out.
                 if (topics.Count is 0) return;
 
-                await foreach (var eventResponse in clientTransport.GetEventStreamAsync(new GetEventStreamRequest(topics.ToArray()), cancellationToken))
+                await foreach (var eventResponse in clientTransport.GetEventStreamAsync(
+                                   new GetEventStreamRequest(topics.ToArray()), cancellationToken))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
@@ -169,7 +173,8 @@ public class BatchManagementService(
         }
     }
 
-    private async Task ProcessEventForAllIntentsAsync(int connectionId, BatchEvent eventResponse, CancellationToken cancellationToken)
+    private async Task ProcessEventForAllIntentsAsync(int connectionId, BatchEvent eventResponse,
+        CancellationToken cancellationToken)
     {
         // Handle BatchStarted event first - check all intents at once
         if (eventResponse is BatchStartedEvent batchStartedEvent)
@@ -191,7 +196,8 @@ public class BatchManagementService(
                         continue;
                     }
 
-                    var isComplete = await batchSession.BatchSession.ProcessEventAsync(eventResponse, cancellationToken);
+                    var isComplete =
+                        await batchSession.BatchSession.ProcessEventAsync(eventResponse, cancellationToken);
                     if (isComplete)
                     {
                         _activeBatchSessions.TryRemove(intentId, out _);
@@ -221,6 +227,7 @@ public class BatchManagementService(
                             _activeIntents.TryRemove(intentId, out _);
                             TriggerStreamUpdate();
                         }
+
                         break;
 
                     case BatchFinalizedEvent batchFinalized:
@@ -231,6 +238,7 @@ public class BatchManagementService(
                             _activeIntents.TryRemove(intentId, out _);
                             TriggerStreamUpdate();
                         }
+
                         break;
                 }
             }
@@ -307,7 +315,9 @@ public class BatchManagementService(
             try
             {
                 // Get signer
-                var signer = await arkWalletService.FindSigningEntity(KeyExtensions.ParseOutputDescriptor(intent.SignerDescriptor, serverInfo.Network));
+                var signer = await arkWalletService.FindSigningEntity(
+                    KeyExtensions.ParseOutputDescriptor(intent.SignerDescriptor, serverInfo.Network),
+                    cancellationToken);
 
                 HashSet<ArkPsbtSigner> allWalletCoins = [];
                 foreach (var outpoint in allVtxoOutpoints)
@@ -347,12 +357,13 @@ public class BatchManagementService(
                     _connectionManipulationSemaphore.Release();
                 }
 
-                await SaveToStorage(intentId, arkIntent => (arkIntent ?? throw new InvalidOperationException("Failed to find intent in cache")) with
-                {
-                    BatchId = batchEvent.Id,
-                    State = ArkIntentState.BatchInProgress,
-                    UpdatedAt = DateTimeOffset.UtcNow
-                }, cancellationToken);
+                await SaveToStorage(intentId, arkIntent =>
+                    (arkIntent ?? throw new InvalidOperationException("Failed to find intent in cache")) with
+                    {
+                        BatchId = batchEvent.Id,
+                        State = ArkIntentState.BatchInProgress,
+                        UpdatedAt = DateTimeOffset.UtcNow
+                    }, cancellationToken);
 
                 await LoadActiveIntentsAsync(cancellationToken);
 
@@ -384,7 +395,6 @@ public class BatchManagementService(
                 }
 
                 _ = RunSharedEventStreamController(_serviceCts!.Token);
-
             }
             catch
             {
@@ -412,15 +422,17 @@ public class BatchManagementService(
         BatchFailedEvent batchEvent,
         CancellationToken cancellationToken)
     {
-        if (intent.BatchId == batchEvent.Id)
-        {
-            await SaveToStorage(intent.IntentId!, arkIntent => (arkIntent ?? throw new InvalidOperationException("Failed to find intent in cache")) with
+        await SaveToStorage(intent.IntentId!, arkIntent =>
+            (arkIntent ?? throw new InvalidOperationException("Failed to find intent in cache")) with
             {
                 State = ArkIntentState.BatchFailed,
                 CancellationReason = $"Batch failed: {batchEvent.Reason}",
                 UpdatedAt = DateTimeOffset.UtcNow
             }, cancellationToken);
-        }
+        
+        await eventHandlers.SafeHandleEventAsync(
+            new PostBatchSessionEvent(intent, null, ActionState.Failed, batchEvent.Reason),
+            cancellationToken);
     }
 
     private async Task HandleBatchFinalizedAsync(
@@ -428,12 +440,17 @@ public class BatchManagementService(
         BatchFinalizedEvent finalizedEvent,
         CancellationToken cancellationToken)
     {
-        await SaveToStorage(intent.IntentId!, arkIntent => (arkIntent ?? throw new InvalidOperationException("Failed to find intent in cache")) with
-        {
-            State = ArkIntentState.BatchSucceeded,
-            CommitmentTransactionId = finalizedEvent.CommitmentTxId,
-            UpdatedAt = DateTimeOffset.UtcNow
-        }, cancellationToken);
+        await SaveToStorage(intent.IntentId!, arkIntent =>
+            (arkIntent ?? throw new InvalidOperationException("Failed to find intent in cache")) with
+            {
+                State = ArkIntentState.BatchSucceeded,
+                CommitmentTransactionId = finalizedEvent.CommitmentTxId,
+                UpdatedAt = DateTimeOffset.UtcNow
+            }, cancellationToken);
+
+        await eventHandlers.SafeHandleEventAsync(
+            new PostBatchSessionEvent(intent, finalizedEvent.CommitmentTxId, ActionState.Successful, null),
+            cancellationToken);
     }
 
     #endregion
@@ -508,5 +525,15 @@ public class BatchManagementService(
         _activeBatchSessions.Clear();
 
         _disposed = true;
+    }
+
+    public BatchManagementService(IIntentStorage intentStorage,
+        IWallet arkWalletService,
+        IClientTransport clientTransport,
+        IVtxoStorage vtxoStorage,
+        ISigningService signingService,
+        ISafetyService safetyService)
+        : this(intentStorage, arkWalletService, clientTransport, vtxoStorage, signingService, safetyService, [])
+    {
     }
 }
