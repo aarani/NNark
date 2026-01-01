@@ -8,7 +8,6 @@ using NArk.Tests.End2End.TestPersistance;
 using NArk.Transport;
 using NArk.Transport.GrpcClient;
 using NArk.Wallets;
-using NSubstitute;
 
 namespace NArk.Tests.End2End.Common;
 
@@ -19,12 +18,7 @@ internal static class FundedWalletHelper
         var receivedFirstVtxoTcs = new TaskCompletionSource();
         var vtxoStorage = new InMemoryVtxoStorage();
         vtxoStorage.VtxosChanged += (sender, args) => receivedFirstVtxoTcs.TrySetResult();
-
-        // Receive arkd information
-        var clientTransport =
-            Substitute.ForTypeForwardingTo<IClientTransport, GrpcClientTransport>(
-                app.GetEndpoint("ark", "arkd").ToString()
-            );
+        var clientTransport = new GrpcClientTransport(app.GetEndpoint("ark", "arkd").ToString());
 
         var info = await clientTransport.GetServerInfoAsync();
 

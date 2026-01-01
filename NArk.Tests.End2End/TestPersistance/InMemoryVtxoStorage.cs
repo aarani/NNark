@@ -10,12 +10,13 @@ public class InMemoryVtxoStorage : IVtxoStorage
 
     public event EventHandler<ArkVtxo>? VtxosChanged;
 
-    public virtual Task SaveVtxo(ArkVtxo vtxo, CancellationToken cancellationToken = default)
+    public virtual Task<bool> UpsertVtxo(ArkVtxo vtxo, CancellationToken cancellationToken = default)
     {
         try
         {
+            _vtxos.TryGetValue(vtxo.OutPoint.ToString(), out var oldVtxo);
             _vtxos[vtxo.OutPoint.ToString()] = vtxo;
-            return Task.CompletedTask;
+            return Task.FromResult(oldVtxo is null || vtxo != oldVtxo);
         }
         finally
         {

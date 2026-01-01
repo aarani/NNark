@@ -157,7 +157,7 @@ public class VtxoSynchronizationService : IAsyncDisposable
             await foreach (var vtxo in _arkClientTransport.GetVtxoByScriptsAsSnapshot(pollBatch, cancellationToken))
             {
                 // Upsert
-                await _vtxoStorage.SaveVtxo(vtxo, cancellationToken);
+                var updated = await _vtxoStorage.UpsertVtxo(vtxo, cancellationToken);
             }
         }
     }

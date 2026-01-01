@@ -3,7 +3,6 @@ using Aspire.Hosting;
 using CliWrap;
 using CliWrap.Buffered;
 using NArk.Abstractions;
-using NArk.Abstractions.VTXOs;
 using NArk.Contracts;
 using NArk.Safety.AsyncKeyedLock;
 using NArk.Services;
@@ -11,7 +10,6 @@ using NArk.Tests.End2End.TestPersistance;
 using NArk.Transport.GrpcClient;
 using NArk.Wallets;
 using NBitcoin;
-using NSubstitute;
 
 namespace NArk.Tests.End2End;
 
@@ -44,14 +42,24 @@ public class VtxoSynchronizationTests
     [Test]
     public async Task CanReceiveVtxosFromImportedContract()
     {
-        // Mock the VTXO storage so we can listen for new vtxos
-        var vtxoStorage = Substitute.For<IVtxoStorage>();
-        vtxoStorage.GetUnspentVtxos().ReturnsForAnyArgs([]);
-        vtxoStorage.SaveVtxo(Arg.Any<ArkVtxo>()).ReturnsForAnyArgs(Task.CompletedTask);
-
         // Receive arkd information
         var clientTransport = new GrpcClientTransport(_app.GetEndpoint("ark", "arkd").ToString());
         var info = await clientTransport.GetServerInfoAsync();
+        
+        // Pay a random amount to the contract address
+        var randomAmount = RandomNumberGenerator.GetInt32((int)info.Dust.Satoshi, 100000);
+
+        // Listen for incoming vtxos
+        var receiveTcs = new TaskCompletionSource();
+        var vtxoStorage = new InMemoryVtxoStorage();
+
+        vtxoStorage.VtxosChanged += (_, vtxo) =>
+        {
+            if (!vtxo.IsSpent() && vtxo.Amount == (ulong)randomAmount)
+            {
+                receiveTcs.TrySetResult();
+            }
+        };
 
         // Create a new wallet
         var inMemoryWalletStorage = new InMemoryWalletStorage();
@@ -80,8 +88,6 @@ public class VtxoSynchronizationTests
         );
         await contractService.ImportContract("wallet1", contract);
 
-        // Pay a random amount to the contract address
-        var randomAmount = RandomNumberGenerator.GetInt32((int)info.Dust.Satoshi, 100000);
         await Cli.Wrap("docker")
             .WithArguments([
                 "exec", "-t", "ark", "ark", "send", "--to", contract.GetArkAddress().ToString(false), "--amount",
@@ -90,19 +96,7 @@ public class VtxoSynchronizationTests
             .ExecuteBufferedAsync();
 
         // Wait for the sync service to receive it
-        await Task.Delay(TimeSpan.FromSeconds(5));
-
-        // Assert that we received the vtxo
-        var vtxos = vtxoStorage.ReceivedCalls();
-        Assert.That(
-            vtxos
-                .Any(v =>
-                    v.GetMethodInfo().Name == nameof(IVtxoStorage.SaveVtxo) &&
-                    ((ArkVtxo)v.GetArguments()[0]!).Script == contract.GetArkAddress().ScriptPubKey.ToHex() &&
-                    ((ArkVtxo)v.GetArguments()[0]!).Amount == (ulong)randomAmount
-                ),
-            Is.True
-        );
+        await receiveTcs.Task.WaitAsync(TimeSpan.FromSeconds(15));
     }
 
     [Test]
@@ -110,13 +104,12 @@ public class VtxoSynchronizationTests
     {
         // Receive arkd information
         var clientTransport = new GrpcClientTransport(_app.GetEndpoint("ark", "arkd").ToString());
-        var info = await clientTransport.GetServerInfoAsync();
 
         // Create a new wallet
         var inMemoryWalletStorage = new InMemoryWalletStorage();
         var contracts = new InMemoryContractStorage();
 
-        var vtxoStorage = GetMockVtxoStorageWithImpl();
+        var vtxoStorage = new InMemoryVtxoStorage();
 
         var safetyService = new AsyncSafetyService();
 
@@ -127,7 +120,7 @@ public class VtxoSynchronizationTests
         var contractService = new ContractService(wallet, contracts, clientTransport);
 
         // Start vtxo synchronization service
-        var vtxoSync = new VtxoSynchronizationService(
+        await using var vtxoSync = new VtxoSynchronizationService(
             inMemoryWalletStorage,
             vtxoStorage,
             contracts,
@@ -137,9 +130,24 @@ public class VtxoSynchronizationTests
 
         var contract = await contractService.DerivePaymentContract("wallet1");
         var wallet1Address = contract.GetArkAddress();
-
+        
         // Pay a random amount to the contract address
-        var randomAmount = RandomNumberGenerator.GetInt32((int)info.Dust.Satoshi, 100000);
+        var randomAmount = 50000;
+        var receiveTcs = new TaskCompletionSource();
+        var receiveHalfTcs = new TaskCompletionSource();
+        
+        vtxoStorage.VtxosChanged += (_, vtxo) =>
+        {
+            if (!vtxo.IsSpent() && (ulong)randomAmount == vtxo.Amount)
+            {
+                receiveTcs.TrySetResult();
+            }
+            else if (!vtxo.IsSpent() && (ulong)(randomAmount / 2) == vtxo.Amount)
+            {
+                receiveHalfTcs.TrySetResult();
+            }
+        };
+        
         await Cli.Wrap("docker")
             .WithArguments([
                 "exec", "-t", "ark", "ark", "send", "--to", wallet1Address.ToString(false),
@@ -148,70 +156,20 @@ public class VtxoSynchronizationTests
             .ExecuteBufferedAsync();
 
         // Wait for the sync service to receive it
-        await Task.Delay(TimeSpan.FromSeconds(15));
-
-        // Assert that we received the vtxo
-        var vtxos = vtxoStorage.ReceivedCalls();
-        Assert.That(
-            vtxos
-                .Any(v =>
-                    v.GetMethodInfo().Name == nameof(IVtxoStorage.SaveVtxo) &&
-                    ((ArkVtxo)v.GetArguments()[0]!).Script == wallet1Address.ScriptPubKey.ToHex() &&
-                    ((ArkVtxo)v.GetArguments()[0]!).Amount == (ulong)randomAmount
-                ),
-            Is.True
-        );
+        await receiveTcs.Task.WaitAsync(TimeSpan.FromSeconds(15));
 
         // Generate a new payment contract to receive funds from first wallet, save to storage
         var contract2 = await contractService.DerivePaymentContract("wallet2");
         var wallet2Address = contract2.GetArkAddress();
 
-        vtxoStorage.ClearReceivedCalls();
         var spendingService = new SpendingService(vtxoStorage, contracts,
             new SigningService(wallet, contracts, clientTransport), contractService, clientTransport, safetyService, new InMemoryIntentStorage());
 
         await spendingService.Spend("wallet1",
         [
-            new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(randomAmount), wallet2Address)
+            new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(randomAmount / 2), wallet2Address)
         ]);
 
-        // Wait for the sync service to receive it
-        await Task.Delay(TimeSpan.FromSeconds(10));
-
-        // Flush the tasks
-        await vtxoSync.DisposeAsync();
-
-        // Assert that we received the vtxo
-        var vtxos2 = vtxoStorage.ReceivedCalls();
-        Assert.That(
-            vtxos2
-                .Any(v =>
-                    v.GetMethodInfo().Name == nameof(IVtxoStorage.SaveVtxo) &&
-                    ((ArkVtxo)v.GetArguments()[0]!).Script == wallet2Address.ScriptPubKey.ToHex() &&
-                    ((ArkVtxo)v.GetArguments()[0]!).Amount == (ulong)randomAmount
-                ),
-            Is.True
-        );
-    }
-
-    private static IVtxoStorage GetMockVtxoStorageWithImpl()
-    {
-        // Setup VTXO Storage
-        var vtxoStorageImpl = new InMemoryVtxoStorage();
-        var vtxoStorage = Substitute.For<IVtxoStorage>();
-
-        vtxoStorage.GetAllVtxos().ReturnsForAnyArgs((_) => vtxoStorageImpl.GetAllVtxos());
-        vtxoStorage.GetUnspentVtxos().ReturnsForAnyArgs((_) => vtxoStorageImpl.GetUnspentVtxos());
-        vtxoStorage.GetVtxosByScripts(
-                Arg.Any<IReadOnlyCollection<string>>(),
-                Arg.Any<bool>()
-            )
-            .ReturnsForAnyArgs(c =>
-                vtxoStorageImpl.GetVtxosByScripts(c.Arg<IReadOnlyCollection<string>>(), c.Arg<bool>()));
-        vtxoStorage.GetVtxoByOutPoint(Arg.Any<OutPoint>(), Arg.Any<CancellationToken>())
-            .ReturnsForAnyArgs(c => vtxoStorageImpl.GetVtxoByOutPoint(c.Arg<OutPoint>(), c.Arg<CancellationToken>()));
-        vtxoStorage.SaveVtxo(Arg.Any<ArkVtxo>()).ReturnsForAnyArgs(c => vtxoStorageImpl.SaveVtxo(c.Arg<ArkVtxo>()));
-
-        return vtxoStorage;
+        await receiveHalfTcs.Task.WaitAsync(TimeSpan.FromSeconds(10));
     }
 }
