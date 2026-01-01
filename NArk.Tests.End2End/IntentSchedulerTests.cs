@@ -73,7 +73,6 @@ public class IntentSchedulerTests
         };
 
         await using var intentGeneration = new IntentGenerationService(walletDetails.clientTransport,
-            walletDetails.inMemoryWalletStorage,
             signingService, intentStorage,
             walletDetails.contracts, walletDetails.vtxoStorage, scheduler,
             options);

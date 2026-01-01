@@ -131,11 +131,11 @@ public class SweeperService(
                 {
                     break;
                 }
-                catch (Exception e)
+                catch
                 {
                     if (possiblePaths.Count == 0)
                     {
-                        // log exception as all paths failed.
+                        // TODO: log exception as all paths failed.
                     }
                 }
             }

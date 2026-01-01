@@ -79,7 +79,6 @@ public class BatchSessionTests
         { PollInterval = TimeSpan.FromHours(5) });
 
         await using var intentGeneration = new IntentGenerationService(walletDetails.clientTransport,
-            walletDetails.inMemoryWalletStorage,
             signingService,
             intentStorage,
             walletDetails.contracts, walletDetails.vtxoStorage, scheduler,
@@ -96,7 +95,7 @@ public class BatchSessionTests
 
         await using var batchManager = new BatchManagementService(intentStorage, walletDetails.wallet,
             walletDetails.clientTransport, walletDetails.vtxoStorage,
-            walletDetails.contracts, signingService, walletDetails.safetyService);
+            signingService, walletDetails.safetyService);
 
         await batchManager.StartAsync(CancellationToken.None);
 

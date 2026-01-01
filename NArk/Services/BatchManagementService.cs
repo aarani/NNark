@@ -27,7 +27,6 @@ public class BatchManagementService(
     IWallet arkWalletService,
     IClientTransport clientTransport,
     IVtxoStorage vtxoStorage,
-    IContractStorage contractStorage,
     ISigningService signingService,
     ISafetyService safetyService)
     : IAsyncDisposable

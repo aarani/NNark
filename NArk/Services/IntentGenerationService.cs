@@ -4,7 +4,6 @@ using NArk.Abstractions;
 using NArk.Abstractions.Contracts;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.VTXOs;
-using NArk.Abstractions.Wallets;
 using NArk.Helpers;
 using NArk.Models;
 using NArk.Models.Options;
@@ -17,7 +16,6 @@ namespace NArk.Services;
 
 public class IntentGenerationService(
     IClientTransport clientTransport,
-    IWalletStorage walletStorage,
     ISigningService signingService,
     IIntentStorage intentStorage,
     IContractStorage contractStorage,
