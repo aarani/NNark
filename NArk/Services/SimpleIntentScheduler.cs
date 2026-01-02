@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using NArk.Abstractions;
 using NArk.Abstractions.Blockchain;
+using NArk.Abstractions.Fees;
 using NArk.Abstractions.Intents;
 using NArk.Models.Options;
 using NArk.Transport;
@@ -8,7 +9,7 @@ using NBitcoin;
 
 namespace NArk.Services;
 
-public class SimpleIntentScheduler(IClientTransport clientTransport, IContractService contractService, IChainTimeProvider chainTimeProvider, IOptions<SimpleIntentSchedulerOptions> options) : IIntentScheduler
+public class SimpleIntentScheduler(IFeeEstimator feeEstimator,  IClientTransport clientTransport, IContractService contractService, IChainTimeProvider chainTimeProvider, IOptions<SimpleIntentSchedulerOptions> options) : IIntentScheduler
 {
     public async Task<IReadOnlyCollection<ArkIntentSpec>> GetIntentsToSubmit(
         IReadOnlyCollection<ArkCoinLite> unspentVtxos, CancellationToken cancellationToken = default)
@@ -31,33 +32,47 @@ public class SimpleIntentScheduler(IClientTransport clientTransport, IContractSe
 
         foreach (var g in coins)
         {
-            var inputsSumAfterBeforeFees = g.Sum(coin => coin.Amount);
-            var inputsSumAfterAfterFees =
-                inputsSumAfterBeforeFees
-                - (serverInfo.FeeTerms.IntentOffchainInput * g.Count())
-                - serverInfo.FeeTerms.IntentOffchainOutput;
+            var outputContract = await contractService.DerivePaymentContract(g.Key, cancellationToken);
 
+            var inputsSumAfterBeforeFees = g.Sum(c => c.Amount);
+            var specBeforeFees =
+                new ArkIntentSpec(
+                    g.ToArray(),
+                    [
+                        new ArkTxOut(
+                            ArkTxOutType.Vtxo,
+                            inputsSumAfterBeforeFees,
+                            outputContract.GetArkAddress()
+                        )
+                    ],
+                    DateTimeOffset.UtcNow,
+                    DateTimeOffset.UtcNow.AddHours(1)
+                );
+
+            var fees = await feeEstimator.EstimateFeeAsync(specBeforeFees, cancellationToken);
+
+            var inputsSumAfterAfterFees = inputsSumAfterBeforeFees - fees;
+            
             if (inputsSumAfterAfterFees < Money.Zero)
                 continue;
             if (inputsSumAfterBeforeFees < serverInfo.Dust)
                 throw new NotImplementedException();
-
-            var outputContract = await contractService.DerivePaymentContract(g.Key, cancellationToken);
-
-            intentSpecs.Add(
+            
+            var finalSpec =
                 new ArkIntentSpec(
-                g.ToArray(),
-                [
+                    g.ToArray(),
+                    [
                         new ArkTxOut(
                             ArkTxOutType.Vtxo,
                             inputsSumAfterAfterFees,
                             outputContract.GetArkAddress()
                         )
                     ],
-                DateTimeOffset.UtcNow,
-                DateTimeOffset.UtcNow.AddHours(1)
-                )
-            );
+                    DateTimeOffset.UtcNow,
+                    DateTimeOffset.UtcNow.AddHours(1)
+                );
+            
+            intentSpecs.Add(finalSpec);
         }
 
         return intentSpecs;

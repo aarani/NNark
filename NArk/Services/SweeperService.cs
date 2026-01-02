@@ -168,7 +168,7 @@ public class SweeperService(
         if (parsedContract is null)
             throw new UnableToSignUnknownContracts(
                 $"Could not parse contract belonging to vtxo {vtxo.TransactionId}:{vtxo.TransactionOutputIndex}");
-        return new ArkUnspendableCoin(contract.WalletIdentifier, parsedContract, vtxo.ExpiresAt, vtxo.ExpiresAtHeight,
+        return new ArkUnspendableCoin(contract.WalletIdentifier, parsedContract, vtxo.CreatedAt, vtxo.ExpiresAt, vtxo.ExpiresAtHeight,
             vtxo.OutPoint, vtxo.TxOut, vtxo.Recoverable);
     }
 

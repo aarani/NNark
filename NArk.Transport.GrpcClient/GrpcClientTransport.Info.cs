@@ -44,31 +44,13 @@ public partial class GrpcClientTransport
             ForfeitAddress: BitcoinAddress.Create(response.ForfeitAddress, network),
             ForfeitPubKey: fPubKey,
             CheckpointTapScript: serverUnrollScript,
-            FeeTerms: GetArkFees(response.Fees)
+            FeeTerms: new ArkOperatorFeeTerms(
+                TxFeeRate: response.Fees.TxFeeRate,
+                IntentOffchainOutput: response.Fees.IntentFee.OffchainOutput,
+                IntentOnchainOutput: response.Fees.IntentFee.OnchainOutput,
+                IntentOffchainInput: response.Fees.IntentFee.OffchainInput,
+                IntentOnchainInput: response.Fees.IntentFee.OnchainInput
+            )
         );
-    }
-
-    private ArkOperatorFeeTerms GetArkFees(FeeInfo response)
-    {
-        var fees = new ArkOperatorFeeTerms(
-            TxFeeRate: Money.Zero,
-            IntentOffchainOutput: Money.Zero,
-            IntentOnchainOutput: Money.Zero,
-            IntentOffchainInput: Money.Zero,
-            IntentOnchainInput: Money.Zero
-        );
-
-        if (decimal.TryParse(response?.TxFeeRate, out var txFeeRate))
-            fees = fees with { TxFeeRate = Money.Satoshis(txFeeRate) };
-        if (decimal.TryParse(response?.IntentFee.OffchainOutput, out var offchainOutputFee))
-            fees = fees with { IntentOffchainOutput = Money.Satoshis(offchainOutputFee) };
-        if (decimal.TryParse(response?.IntentFee.OffchainInput, out var offchainInput))
-            fees = fees with { IntentOffchainInput = Money.Satoshis(offchainInput) };
-        if (decimal.TryParse(response?.IntentFee.OnchainOutput, out var onchainOutputFee))
-            fees = fees with { IntentOnchainOutput = Money.Satoshis(onchainOutputFee) };
-        if (decimal.TryParse(response?.IntentFee.OnchainInput, out var onchainInput))
-            fees = fees with { IntentOnchainInput = Money.Satoshis(onchainInput) };
-
-        return fees;
     }
 }

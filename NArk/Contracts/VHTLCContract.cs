@@ -111,7 +111,7 @@ public class VHTLCContract : ArkContract
 
     public ArkCoin ToCoopRefundCoin(string walletIdentifier, ArkVtxo vtxo)
     {
-        return new ArkCoin(walletIdentifier, this, vtxo.ExpiresAt, vtxo.ExpiresAtHeight, vtxo.OutPoint, vtxo.TxOut, Sender,
+        return new ArkCoin(walletIdentifier, this, vtxo.CreatedAt, vtxo.ExpiresAt, vtxo.ExpiresAtHeight, vtxo.OutPoint, vtxo.TxOut, Sender,
             CreateCooperativeScript(), null, null, null, vtxo.Recoverable);
     }
 

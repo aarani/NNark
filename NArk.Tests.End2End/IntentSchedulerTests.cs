@@ -2,6 +2,7 @@ using Aspire.Hosting;
 using Microsoft.Extensions.Options;
 using NArk.Abstractions.Intents;
 using NArk.Blockchain.NBXplorer;
+using NArk.Fees;
 using NArk.Models.Options;
 using NArk.Services;
 using NArk.Tests.End2End.Common;
@@ -42,7 +43,7 @@ public class IntentSchedulerTests
         var walletDetails = await FundedWalletHelper.GetFundedWallet(_app);
 
         // The threshold is so high, it will force an intent generation
-        var scheduler = new SimpleIntentScheduler(walletDetails.clientTransport, walletDetails.contractService,
+        var scheduler = new SimpleIntentScheduler(new DefaultFeeEstimator(walletDetails.clientTransport), walletDetails.clientTransport, walletDetails.contractService,
             new ChainTimeProvider(Network.RegTest, _app.GetEndpoint("nbxplorer", "http")),
             new OptionsWrapper<SimpleIntentSchedulerOptions>(new SimpleIntentSchedulerOptions()
             { Threshold = TimeSpan.FromHours(2), ThresholdHeight = 2000 }));
@@ -73,7 +74,7 @@ public class IntentSchedulerTests
         };
 
         await using var intentGeneration = new IntentGenerationService(walletDetails.clientTransport,
-            signingService, intentStorage,
+            new DefaultFeeEstimator(walletDetails.clientTransport), signingService, intentStorage,
             walletDetails.contracts, walletDetails.vtxoStorage, scheduler,
             options);
         await using var intentSync = new IntentSynchronizationService(intentStorage, walletDetails.clientTransport, walletDetails.safetyService);

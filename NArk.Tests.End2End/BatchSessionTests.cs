@@ -2,6 +2,7 @@ using Aspire.Hosting;
 using Microsoft.Extensions.Options;
 using NArk.Abstractions.Intents;
 using NArk.Blockchain.NBXplorer;
+using NArk.Fees;
 using NArk.Models.Options;
 using NArk.Services;
 using NArk.Tests.End2End.Common;
@@ -47,7 +48,7 @@ public class BatchSessionTests
         var intentStorage = new InMemoryIntentStorage();
 
         // The threshold is so high, it will force an intent generation
-        var scheduler = new SimpleIntentScheduler(walletDetails.clientTransport, walletDetails.contractService,
+        var scheduler = new SimpleIntentScheduler(new DefaultFeeEstimator(walletDetails.clientTransport), walletDetails.clientTransport, walletDetails.contractService,
             new ChainTimeProvider(Network.RegTest, _app.GetEndpoint("nbxplorer", "http")),
             new OptionsWrapper<SimpleIntentSchedulerOptions>(new SimpleIntentSchedulerOptions()
             { Threshold = TimeSpan.FromHours(2), ThresholdHeight = 2000 }));
@@ -79,6 +80,7 @@ public class BatchSessionTests
         { PollInterval = TimeSpan.FromHours(5) });
 
         await using var intentGeneration = new IntentGenerationService(walletDetails.clientTransport,
+            new DefaultFeeEstimator(walletDetails.clientTransport),
             signingService,
             intentStorage,
             walletDetails.contracts, walletDetails.vtxoStorage, scheduler,

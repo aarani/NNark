@@ -93,6 +93,7 @@ public static class TransactionHelpers
                         Coin = new ArkCoin(
                             coin.Coin.WalletIdentifier,
                             checkpointContract,
+                            coin.Coin.Birth,
                             coin.Coin.ExpiresAt,
                             coin.Coin.ExpiresAtHeight,
                             outpoint,

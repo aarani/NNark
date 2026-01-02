@@ -1,8 +1,8 @@
-using NBitcoin;
+using NArk.Abstractions.Intents;
 
 namespace NArk.Abstractions.Fees;
 
 public interface IFeeEstimator
 {
-    public decimal EstimateFee(Coin[] coins, TxOut[] target, CancellationToken cancellationToken = default);
+    public Task<long> EstimateFeeAsync(ArkIntentSpec spec, CancellationToken cancellationToken = default);
 }

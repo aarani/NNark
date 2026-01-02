@@ -79,7 +79,6 @@ public class BatchManagementService(
             {
                 var unreservedConnections =
                     _isReservedConnections.Where(kvp => !kvp.Value).ToArray();
-
                 if (unreservedConnections.Length > 1)
                     foreach (var (connId, _) in unreservedConnections.Skip(1))
                     {

@@ -10,7 +10,7 @@ public record ArkVtxo(
     string? SpentByTransactionId,
     string? SettledByTransactionId,
     bool Recoverable,
-    DateTimeOffset? CreatedAt,
+    DateTimeOffset CreatedAt,
     DateTimeOffset? ExpiresAt,
     uint? ExpiresAtHeight)
 {

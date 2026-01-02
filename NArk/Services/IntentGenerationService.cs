@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using NArk.Abstractions;
 using NArk.Abstractions.Contracts;
+using NArk.Abstractions.Fees;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.VTXOs;
 using NArk.Helpers;
@@ -16,13 +17,14 @@ namespace NArk.Services;
 
 public class IntentGenerationService(
     IClientTransport clientTransport,
+    IFeeEstimator feeEstimator,
     ISigningService signingService,
     IIntentStorage intentStorage,
     IContractStorage contractStorage,
     IVtxoStorage vtxoStorage,
     IIntentScheduler intentScheduler,
     IOptions<IntentGenerationServiceOptions>? options = null
-) : IAsyncDisposable
+) : IIntentGenerationService, IAsyncDisposable
 {
     private readonly CancellationTokenSource _shutdownCts = new();
     private Task? _generationTask;
@@ -68,46 +70,7 @@ public class IntentGenerationService(
 
                     foreach (var intentSpec in intentSpecs)
                     {
-                        var outputsSum = intentSpec.Outputs.Sum(o => o.Value);
-                        var inputsSum = intentSpec.Coins.Sum(c => c.Amount);
-                        var onchainOutputCount =
-                            intentSpec.Outputs.Count(o => o.Type == ArkTxOutType.Onchain);
-                        var offchainOutputCount =
-                            intentSpec.Outputs.Count(o => o.Type == ArkTxOutType.Vtxo);
-                        var inputsCount = intentSpec.Coins.Length;
-                        // TODO: OnchainInput should be considered when we add utxo onboarding
-                        var fee = (inputsCount * serverInfo.FeeTerms.IntentOffchainInput) +
-                                  (offchainOutputCount * serverInfo.FeeTerms.IntentOffchainOutput) +
-                                  (onchainOutputCount * serverInfo.FeeTerms.IntentOnchainOutput);
-
-                        if (outputsSum < inputsSum + fee)
-                        {
-                            throw new InvalidOperationException(
-                                $"Scheduler is not considering fees properly, missing fees by {inputsSum + fee - outputsSum} sats");
-                        }
-
-                        var overlappingIntents =
-                            await intentStorage.GetIntentsByInputs(activeContractsByWallet.Key, [.. intentSpec.Coins.Select(c => c.Outpoint)], true, token);
-                        if (overlappingIntents.Count != 0)
-                            continue;
-
-                        var intentTxs = await CreateIntents(
-                            serverInfo.Network,
-                            [await signers[intentSpec.Coins[0]].SigningEntity.GetPublicKey(token)],
-                            intentSpec.ValidFrom,
-                            intentSpec.ValidUntil,
-                            [.. signers.Where(s => intentSpec.Coins.Contains(s.Key)).Select(s => s.Value)],
-                            intentSpec.Outputs,
-                            token
-                        );
-
-                        await intentStorage.SaveIntent(activeContractsByWallet.Key,
-                            new ArkIntent(Guid.NewGuid(), null, activeContractsByWallet.Key, ArkIntentState.WaitingToSubmit,
-                                intentSpec.ValidFrom, intentSpec.ValidUntil, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow,
-                                intentTxs.RegisterTx.ToBase64(), intentTxs.RegisterMessage, intentTxs.Delete.ToBase64(),
-                                intentTxs.DeleteMessage, null, null, null,
-                                intentSpec.Coins.Select(c => c.Outpoint).ToArray(),
-                                (await signers[intentSpec.Coins[0]].SigningEntity.GetOutputDescriptor(token)).ToString()), token);
+                        await GenerateIntentFromSpec(activeContractsByWallet.Key, intentSpec, signers, token);
                     }
                 }
 
@@ -118,6 +81,46 @@ public class IntentGenerationService(
         {
             // ignored
         }
+    }
+
+    private async Task<Guid> GenerateIntentFromSpec(string walletId, ArkIntentSpec intentSpec, Dictionary<ArkCoinLite, ArkPsbtSigner> signers, CancellationToken token)
+    {
+        ArkServerInfo serverInfo = await clientTransport.GetServerInfoAsync(token);
+        var outputsSum = intentSpec.Outputs.Sum(o => o.Value);
+        var inputsSum = intentSpec.Coins.Sum(c => c.Amount);
+        var fee = await feeEstimator.EstimateFeeAsync(intentSpec, token);
+        
+        if (outputsSum - inputsSum < fee)
+        {
+            throw new InvalidOperationException(
+                $"Scheduler is not considering fees properly, missing fees by {inputsSum + fee - outputsSum} sats");
+        }
+
+        var overlappingIntents =
+            await intentStorage.GetIntentsByInputs(walletId, [.. intentSpec.Coins.Select(c => c.Outpoint)], true, token);
+        if (overlappingIntents.Count != 0)
+            return Guid.Empty;
+
+        var intentTxs = await CreateIntents(
+            serverInfo.Network,
+            [await signers[intentSpec.Coins[0]].SigningEntity.GetPublicKey(token)],
+            intentSpec.ValidFrom,
+            intentSpec.ValidUntil,
+            [.. signers.Where(s => intentSpec.Coins.Contains(s.Key)).Select(s => s.Value)],
+            intentSpec.Outputs,
+            token
+        );
+
+        var internalId = Guid.NewGuid();
+        await intentStorage.SaveIntent(walletId,
+            new ArkIntent(internalId, null, walletId, ArkIntentState.WaitingToSubmit,
+                intentSpec.ValidFrom, intentSpec.ValidUntil, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow,
+                intentTxs.RegisterTx.ToBase64(), intentTxs.RegisterMessage, intentTxs.Delete.ToBase64(),
+                intentTxs.DeleteMessage, null, null, null,
+                intentSpec.Coins.Select(c => c.Outpoint).ToArray(),
+                (await signers[intentSpec.Coins[0]].SigningEntity.GetOutputDescriptor(token)).ToString()), token);
+
+        return internalId;
     }
 
     private static async Task<PSBT> CreateIntent(string message, Network network, ArkPsbtSigner[] inputs,
@@ -242,4 +245,20 @@ public class IntentGenerationService(
         if (_generationTask is not null)
             await _generationTask;
     }
+
+    public async Task<Guid> GenerateManualIntent(string walletId, ArkIntentSpec spec, Dictionary<ArkCoinLite, ArkPsbtSigner> signers, CancellationToken cancellationToken)
+    {
+        var internalId = await GenerateIntentFromSpec(walletId, spec, signers, cancellationToken);
+        
+        if (internalId == Guid.Empty)
+            throw new InvalidOperationException("Could not create intent, pending intents exist");
+        
+        return internalId;
+    }
+}
+
+public interface IIntentGenerationService
+{
+    Task<Guid> GenerateManualIntent(string walletId, ArkIntentSpec spec, Dictionary<ArkCoinLite, ArkPsbtSigner> signers,
+        CancellationToken cancellationToken);
 }

@@ -53,7 +53,7 @@ public class ArkPaymentContract(OutputDescriptor server, Sequence exitDelay, Out
 
     public override ArkCoin ToArkCoin(string walletIdentifier, ArkVtxo vtxo)
     {
-        return new ArkCoin(walletIdentifier, this, vtxo.ExpiresAt, vtxo.ExpiresAtHeight, vtxo.OutPoint, vtxo.TxOut, User ?? throw new InvalidOperationException("User is required for claim script generation"),
+        return new ArkCoin(walletIdentifier, this, vtxo.CreatedAt, vtxo.ExpiresAt, vtxo.ExpiresAtHeight, vtxo.OutPoint, vtxo.TxOut, User ?? throw new InvalidOperationException("User is required for claim script generation"),
             CollaborativePath(), null, null, null, vtxo.Recoverable);
     }
 

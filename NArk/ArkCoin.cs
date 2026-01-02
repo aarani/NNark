@@ -11,6 +11,7 @@ public class ArkCoin : Coin
 {
     public ArkCoin(string walletIdentifier,
         ArkContract contract,
+        DateTimeOffset birth,
         DateTimeOffset? expiresAt,
         uint? expiresAtHeight,
         OutPoint outPoint,
@@ -24,6 +25,7 @@ public class ArkCoin : Coin
     {
         WalletIdentifier = walletIdentifier;
         Contract = contract;
+        Birth = birth;
         ExpiresAt = expiresAt;
         ExpiresAtHeight = expiresAtHeight;
         SignerDescriptor = signerDescriptor;
@@ -40,7 +42,7 @@ public class ArkCoin : Coin
     }
 
     public ArkCoin(ArkCoin other) : this(
-        other.WalletIdentifier, other.Contract, other.ExpiresAt, other.ExpiresAtHeight, other.Outpoint.Clone(), other.TxOut.Clone(), other.SignerDescriptor,
+        other.WalletIdentifier, other.Contract, other.Birth, other.ExpiresAt, other.ExpiresAtHeight, other.Outpoint.Clone(), other.TxOut.Clone(), other.SignerDescriptor,
         other.SpendingScriptBuilder, other.SpendingConditionWitness?.Clone(), other.LockTime, other.Sequence,
         other.Recoverable)
     {
@@ -48,6 +50,7 @@ public class ArkCoin : Coin
 
     public string WalletIdentifier { get; }
     public ArkContract Contract { get; }
+    public DateTimeOffset Birth { get; }
     public DateTimeOffset? ExpiresAt { get; }
     public uint? ExpiresAtHeight { get; }
     public OutputDescriptor SignerDescriptor { get; }
@@ -78,5 +81,5 @@ public class ArkCoin : Coin
     }
 
     public ArkCoinLite ToLite() =>
-        new(WalletIdentifier, Outpoint, TxOut, Recoverable, ExpiresAtHeight, ExpiresAt);
+        new(WalletIdentifier, Outpoint, TxOut, Recoverable, Birth, ExpiresAtHeight, ExpiresAt, Contract is ArkNoteContract);
 }

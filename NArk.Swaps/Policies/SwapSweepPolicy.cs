@@ -25,14 +25,14 @@ public class SwapSweepPolicy(IWallet wallet, ISwapStorage swapStorage) : ISweepP
 
             if (htlc.Preimage is not null && OutputDescriptorHelpers.GetFingerprint(htlc.Receiver).Equals(fingerprint, StringComparison.InvariantCultureIgnoreCase))
             {
-                yield return new ArkCoin(Coin.WalletIdentifier, htlc, Coin.ExpiresAt, Coin.ExpiresAtHeight, Coin.Outpoint, Coin.TxOut, htlc.Receiver,
+                yield return new ArkCoin(Coin.WalletIdentifier, htlc, Coin.Birth, Coin.ExpiresAt, Coin.ExpiresAtHeight, Coin.Outpoint, Coin.TxOut, htlc.Receiver,
                     htlc.CreateClaimScript(), new WitScript(Op.GetPushOp(htlc.Preimage!)), null, null, Coin.Recoverable);
             }
 
             if (htlc.RefundLocktime.IsTimeLock &&
                 htlc.RefundLocktime.Date < DateTime.UtcNow && OutputDescriptorHelpers.GetFingerprint(htlc.Sender).Equals(fingerprint, StringComparison.InvariantCultureIgnoreCase))
             {
-                yield return new ArkCoin(Coin.WalletIdentifier, htlc, Coin.ExpiresAt, Coin.ExpiresAtHeight, Coin.Outpoint, Coin.TxOut, htlc.Receiver,
+                yield return new ArkCoin(Coin.WalletIdentifier, htlc, Coin.Birth, Coin.ExpiresAt, Coin.ExpiresAtHeight, Coin.Outpoint, Coin.TxOut, htlc.Receiver,
                     htlc.CreateRefundWithoutReceiverScript(), null, htlc.RefundLocktime, null, Coin.Recoverable);
             }
         }
