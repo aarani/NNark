@@ -1,5 +1,6 @@
 using BTCPayServer.Lightning;
 using NArk.Contracts;
+using NArk.Extensions;
 using NArk.Swaps.Boltz.Client;
 using NArk.Swaps.Boltz.Models;
 using NArk.Swaps.Boltz.Models.Swaps.Reverse;
@@ -32,7 +33,7 @@ internal class BoltzSwapService(BoltzClient boltzClient, IClientTransport client
         {
             Invoice = invoice.ToString(),
             RefundPublicKey =
-                Convert.ToHexStringLower(extractedSender.PubKey?.ToBytes() ?? extractedSender.XOnlyPubKey.ToBytes()),
+                (extractedSender.PubKey?.ToBytes() ?? extractedSender.XOnlyPubKey.ToBytes()).ToHexStringLower(),
             From = "ARK",
             To = "BTC",
         }, cancellationToken);
@@ -84,8 +85,8 @@ internal class BoltzSwapService(BoltzClient boltzClient, IClientTransport client
             To = "ARK",
             OnchainAmount = (long)createInvoiceRequest.Amount.ToUnit(LightMoneyUnit.Satoshi),
             ClaimPublicKey =
-                Convert.ToHexStringLower(extractedReceiver.PubKey?.ToBytes() ??
-                                         extractedReceiver.XOnlyPubKey.ToBytes()), // Receiver will claim the VTXO
+                (extractedReceiver.PubKey?.ToBytes() ??
+                                         extractedReceiver.XOnlyPubKey.ToBytes()).ToHexStringLower(), // Receiver will claim the VTXO
             PreimageHash = Encoders.Hex.EncodeData(preimageHash),
             AcceptZeroConf = true,
             DescriptionHash = createInvoiceRequest.DescriptionHash?.ToString(),

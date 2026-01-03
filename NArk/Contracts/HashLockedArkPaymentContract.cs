@@ -47,7 +47,7 @@ public class HashLockedArkPaymentContract(
         var data = new Dictionary<string, string>
         {
             ["exit_delay"] = _exitDelay.Value.ToString(),
-            ["preimage"] = Convert.ToHexStringLower(preimage),
+            ["preimage"] = preimage.ToHexStringLower(),
             ["hash_lock_type"] = Enum.GetName(hashLockType) ?? throw new ArgumentOutOfRangeException(nameof(hashLockType), "Invalid hash lock type")
         };
 

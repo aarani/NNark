@@ -1,3 +1,4 @@
+using NArk.Extensions;
 using NBitcoin;
 using NBitcoin.Scripting;
 using NBitcoin.Secp256k1;
@@ -17,7 +18,7 @@ internal static class OutputDescriptorHelpers
     {
         public string WalletId =>
             AccountPath?.MasterFingerprint.ToString() ??
-                Convert.ToHexStringLower(XOnlyPubKey.ToBytes());
+                XOnlyPubKey.ToBytes().ToHexStringLower();
     };
 
     public static OutputDescriptorMetadata Extract(OutputDescriptor descriptor)

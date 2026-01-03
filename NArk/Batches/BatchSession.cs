@@ -3,6 +3,7 @@ using NArk.Abstractions.Batches;
 using NArk.Abstractions.Batches.ServerEvents;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.Wallets;
+using NArk.Extensions;
 using NArk.Helpers;
 using NArk.Models;
 using NArk.Scripts;
@@ -164,8 +165,8 @@ public class BatchSession(
 
         var request = new SubmitTreeNoncesRequest(
             signingEvent.Id,
-            Convert.ToHexStringLower(pubKey.ToBytes()),
-            nonces.ToDictionary(pair => pair.Key.ToString(), pair => Convert.ToHexStringLower(pair.Value.ToBytes()))
+            pubKey.ToBytes().ToHexStringLower(),
+            nonces.ToDictionary(pair => pair.Key.ToString(), pair => pair.Value.ToBytes().ToHexStringLower())
         );
 
         await clientTransport.SubmitTreeNoncesAsync(
@@ -190,9 +191,9 @@ public class BatchSession(
         var pubKey = await signer.GetPublicKey();
 
         await clientTransport.SubmitTreeSignaturesRequest(
-            new SubmitTreeSignaturesRequest(_batchId, Convert.ToHexStringLower(pubKey.ToBytes()),
+            new SubmitTreeSignaturesRequest(_batchId, pubKey.ToBytes().ToHexStringLower(),
                 signatures.ToDictionary(pair => pair.Key.ToString(),
-                    pair => Convert.ToHexStringLower(pair.Value.ToBytes()))), cancellationToken);
+                    pair => pair.Value.ToBytes().ToHexStringLower())), cancellationToken);
     }
 
     private async Task HandleBatchFinalizationAsync(

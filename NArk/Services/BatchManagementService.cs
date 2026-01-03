@@ -283,7 +283,7 @@ public class BatchManagementService(
         {
             var intentIdBytes = Encoding.UTF8.GetBytes(intentId);
             var intentIdHash = Hashes.SHA256(intentIdBytes);
-            var intentIdHashStr = Convert.ToHexStringLower(intentIdHash);
+            var intentIdHashStr = intentIdHash.ToHexStringLower();
             intentHashMap[intentIdHashStr] = intentId;
         }
 

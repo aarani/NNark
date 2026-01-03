@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net9.0</TargetFramework>
+        <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <WarningsAsErrors>nullable</WarningsAsErrors>
@@ -13,7 +13,7 @@
 
     <ItemGroup>
       <PackageReference Include="NBXplorer.Client" Version="5.0.5" />
-      <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.1" />
+      <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.2" />
     </ItemGroup>
 
 </Project>

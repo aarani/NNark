@@ -7,6 +7,7 @@ using NArk.Abstractions.Fees;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
 using NArk.Abstractions.VTXOs;
+using NArk.Extensions;
 using NArk.Helpers;
 using NArk.Models;
 using NArk.Models.Options;
@@ -260,7 +261,7 @@ public class IntentGenerationService(
             OnchainOutputsIndexes = outs?.Select((x, i) => (x, i)).Where(o => o.x.Type == ArkTxOutType.Onchain).Select((_, i) => i).ToArray() ?? [],
             ValidAt = validAt.ToUnixTimeSeconds(),
             ExpireAt = expireAt.ToUnixTimeSeconds(),
-            CosignersPublicKeys = cosigners.Select(c => Convert.ToHexStringLower(c.ToBytes())).ToArray()
+            CosignersPublicKeys = cosigners.Select(c => c.ToBytes().ToHexStringLower()).ToArray()
         };
 
         var deleteMsg = new Messages.DeleteIntentMessage()
