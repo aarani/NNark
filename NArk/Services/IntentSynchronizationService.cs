@@ -67,7 +67,7 @@ public class IntentSynchronizationService(
         }
     }
 
-    private async Task<string> SubmitIntent(ArkIntent intentToSubmit, CancellationToken token)
+    private async Task SubmitIntent(ArkIntent intentToSubmit, CancellationToken token)
     {
         await using var @lock = await safetyService.LockKeyAsync($"intent::{intentToSubmit.InternalId}", token);
         var intentAfterLock = await intentStorage.GetIntentByInternalId(intentToSubmit.InternalId, token);
@@ -94,8 +94,6 @@ public class IntentSynchronizationService(
 
                 await eventHandlers.SafeHandleEventAsync(new PostIntentSubmissionEvent(intentAfterLock, now, true,
                     ActionState.Successful, null), token);
-
-                return intentId;
             }
             catch (AlreadyLockedVtxoException)
             {
@@ -117,16 +115,22 @@ public class IntentSynchronizationService(
 
                 await eventHandlers.SafeHandleEventAsync(new PostIntentSubmissionEvent(intentAfterLock, now, false,
                     ActionState.Successful, null), token);
-
-                return intentId;
             }
         }
         catch (Exception ex)
         {
-            await eventHandlers.SafeHandleEventAsync(new PostIntentSubmissionEvent(intentAfterLock, DateTimeOffset.UtcNow, false,
+            var now = DateTimeOffset.UtcNow;
+            
+            await intentStorage.SaveIntent(
+                intentAfterLock.WalletId,
+                intentAfterLock with
+                {
+                    State = ArkIntentState.Cancelled,
+                    UpdatedAt = now
+                }, token);
+            
+            await eventHandlers.SafeHandleEventAsync(new PostIntentSubmissionEvent(intentAfterLock, now, false,
                 ActionState.Failed, $"Intent submission failed with ex: {ex}"), token);
-
-            throw;
         }
     }
 
