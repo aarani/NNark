@@ -1,0 +1,141 @@
+using Aspire.Hosting;
+using CliWrap;
+using CliWrap.Buffered;
+using Microsoft.Extensions.Hosting;
+using NArk.Abstractions;
+using NArk.Abstractions.Fees;
+using NArk.Abstractions.Intents;
+using NArk.Abstractions.Wallets;
+using NArk.Blockchain.NBXplorer;
+using NArk.Hosting;
+using NArk.Models.Options;
+using NArk.Safety.AsyncKeyedLock;
+using NArk.Services;
+using NArk.Tests.End2End.TestPersistance;
+using NArk.Wallets;
+using NBitcoin;
+
+namespace NArk.Tests.End2End;
+
+public class OnchainTests
+{
+    private DistributedApplication _app;
+
+    [OneTimeSetUp]
+    public async Task StartDependencies()
+    {
+        ThreadPool.SetMinThreads(50, 50);
+
+        var builder = await DistributedApplicationTestingBuilder
+            .CreateAsync<Projects.NArk_AppHost>(
+                args: ["--noswap"],
+                configureBuilder: (appOptions, _) => { appOptions.AllowUnsecuredTransport = true; }
+            );
+
+        // Start dependencies
+        _app = await builder.BuildAsync();
+        await _app.StartAsync(CancellationToken.None);
+        await _app.ResourceNotifications.WaitForResourceHealthyAsync("ark", CancellationToken.None);
+    }
+
+    [OneTimeTearDown]
+    public async Task StopDependencies()
+    {
+        await _app.StopAsync();
+        await _app.DisposeAsync();
+    }
+
+    [Test]
+    public async Task CanParticipateInBatchWithColabExit()
+    {
+        var arkHost =
+            Host.CreateDefaultBuilder([])
+                .AddArk()
+                .OnCustomGrpcArk(_app.GetEndpoint("ark", "arkd").ToString())
+                .WithSafetyService<AsyncSafetyService>()
+                .WithIntentStorage<InMemoryIntentStorage>()
+                .WithIntentScheduler<SimpleIntentScheduler>()
+                .WithSwapStorage<InMemorySwapStorage>()
+                .WithContractStorage<InMemoryContractStorage>()
+                .WithVtxoStorage<InMemoryVtxoStorage>()
+                .WithWalletStorage<InMemoryWalletStorage>()
+                .WithWallet<SimpleSeedWallet>()
+                .WithTimeProvider<ChainTimeProvider>()
+                .ConfigureServices(s => s.Configure<ChainTimeProviderOptions>(o =>
+                {
+                    o.Network = Network.RegTest;
+                    o.Uri = _app.GetEndpoint("nbxplorer", "http");
+                }))
+                // Prevent usual intents from getting in the way
+                .ConfigureServices(s => s.Configure<SimpleIntentSchedulerOptions>(o =>
+                {
+                    o.Threshold = TimeSpan.FromSeconds(2);
+                    o.ThresholdHeight = 1;
+                }))
+                .ConfigureServices(s => s.Configure<IntentGenerationServiceOptions>(o =>
+                    o.PollInterval = TimeSpan.FromSeconds(5)))
+                .Build();
+
+        await arkHost.StartAsync();
+
+        var contractService = arkHost.Services.GetRequiredService<IContractService>();
+        var wallet = arkHost.Services.GetRequiredService<IWallet>();
+        var intentStorage = arkHost.Services.GetRequiredService<IIntentStorage>();
+
+        await wallet.CreateNewWallet("wallet1");
+        await wallet.CreateNewWallet("wallet2");
+        var contract = await contractService.DerivePaymentContract("wallet1", CancellationToken.None);
+
+        await Cli.Wrap("docker")
+            .WithArguments([
+                "exec", "-t", "ark", "ark", "send", "--to", contract.GetArkAddress().ToString(false), "--amount",
+                "50000", "--password", "secret"
+            ])
+            .ExecuteBufferedAsync();
+
+        var destination =
+            new TaprootAddress(
+                new TaprootPubKey((await (await wallet.GetNewSigningEntity("wallet2")).GetPublicKey()).ToXOnlyPubKey()
+                    .ToBytes()), Network.RegTest);
+
+        var onchainService = arkHost.Services.GetRequiredService<IOnchainService>();
+        var spendingService = arkHost.Services.GetRequiredService<ISpendingService>();
+        var availableCoins = await spendingService.GetAvailableCoins("wallet1", CancellationToken.None);
+        var inputsSumAfterBeforeFees = availableCoins.Sum(c => c.Coin.Amount);
+        var feeEstimator = arkHost.Services.GetRequiredService<IFeeEstimator>();
+        var fees =
+            await feeEstimator.EstimateFeeAsync(
+                availableCoins.Select(a => a.Coin.ToLite()).ToArray(),
+                [
+                    new ArkTxOut(
+                        ArkTxOutType.Onchain,
+                        inputsSumAfterBeforeFees,
+                        destination
+                    )
+                ],
+                CancellationToken.None);
+
+        await onchainService.InitiateCollaborativeExit(
+            availableCoins.ToArray(),
+            [
+                new ArkTxOut(
+                    ArkTxOutType.Onchain,
+                    inputsSumAfterBeforeFees - fees,
+                    destination
+                )
+            ]
+        );
+
+        var gotBatchTcs = new TaskCompletionSource();
+
+        intentStorage.IntentChanged += (_, intent) =>
+        {
+            if (intent.State == ArkIntentState.BatchSucceeded)
+                gotBatchTcs.TrySetResult();
+        };
+
+        await gotBatchTcs.Task.WaitAsync(TimeSpan.FromMinutes(1));
+
+        await arkHost.StopAsync();
+    }
+}

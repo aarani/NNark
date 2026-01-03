@@ -5,9 +5,16 @@ using NArk.Abstractions.Intents;
 using NArk.Transport;
 
 namespace NArk.Fees;
+
 public class DefaultFeeEstimator(IClientTransport clientTransport) : IFeeEstimator
 {
     private readonly ICelEnvironment _celEnvironment = new CelEnvironment(null, null);
+
+    public Task<long> EstimateFeeAsync(ArkCoinLite[] coins, ArkTxOut[] outputs,
+        CancellationToken cancellationToken = default) =>
+        EstimateFeeAsync(new ArkIntentSpec(coins, outputs, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1)),
+            cancellationToken);
+
     public async Task<long> EstimateFeeAsync(ArkIntentSpec spec, CancellationToken cancellationToken = default)
     {
         var info = await clientTransport.GetServerInfoAsync(cancellationToken);
@@ -26,36 +33,36 @@ public class DefaultFeeEstimator(IClientTransport clientTransport) : IFeeEstimat
                 .Outputs
                 .Sum(o =>
                     GetOutputFee(
-                        o.Type == ArkTxOutType.Vtxo ?
-                            offchainOutputFeeFunc : onchainOutputFeeFunc,
+                        o.Type == ArkTxOutType.Vtxo ? offchainOutputFeeFunc : onchainOutputFeeFunc,
                         o
                     )
                 );
         var totalFee = inputFees + outputFees;
-        return (long)Math.Ceiling(totalFee);
+        return Convert.ToInt64(Math.Ceiling(totalFee));
     }
 
     private double GetOutputFee(CelProgramDelegate feeFunc, ArkTxOut txOut)
     {
         var vars = new Dictionary<string, object?>
         {
-            { "amount", txOut.Value.Satoshi },
+            { "amount", Convert.ToDouble(txOut.Value.Satoshi) },
             { "script", txOut.ScriptPubKey.ToHex() }
         };
 
-        return (double)feeFunc.Invoke(vars)!;
+        return Convert.ToDouble(feeFunc.Invoke(vars)!);
     }
+
     private double GetInputFee(CelProgramDelegate offchainInputFeeFunc, ArkCoinLite arkCoin)
     {
         var vars = new Dictionary<string, object?>
         {
-            { "amount", arkCoin.Amount.Satoshi },
+            { "amount", Convert.ToDouble(arkCoin.Amount.Satoshi) },
             { "expiry", arkCoin.GetRawExpiry() },
             { "birth", arkCoin.Birth.ToUnixTimeSeconds() },
-            { "type", arkCoin.Recoverable ? "recoverable" : arkCoin.IsNote ? "note": "vtxo" },
+            { "type", arkCoin.Recoverable ? "recoverable" : arkCoin.IsNote ? "note" : "vtxo" },
             { "weight", 0 }
         };
 
-        return (double)offchainInputFeeFunc.Invoke(vars)!;
+        return Convert.ToDouble(offchainInputFeeFunc.Invoke(vars)!);
     }
 }

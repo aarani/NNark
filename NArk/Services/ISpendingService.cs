@@ -8,4 +8,5 @@ public interface ISpendingService
 {
     Task<uint256> Spend(string walletId, ArkPsbtSigner[] inputs, ArkTxOut[] outputs, CancellationToken cancellationToken = default);
     Task<uint256> Spend(string walletId, ArkTxOut[] outputs, CancellationToken cancellationToken = default);
+    Task<IReadOnlySet<ArkPsbtSigner>> GetAvailableCoins(string walletId, CancellationToken cancellationToken = default);
 }

@@ -95,6 +95,39 @@ public class SpendingService(
         }
     }
 
+    public async Task<IReadOnlySet<ArkPsbtSigner>> GetAvailableCoins(string walletId, CancellationToken cancellationToken = default)
+    {
+        var contracts = await contractStorage.LoadActiveContracts([walletId], cancellationToken);
+        var contractByScript =
+            contracts
+                .GroupBy(c => c.Script)
+                .ToDictionary(g => g.Key, g => g.First());
+        var vtxos = await vtxoStorage.GetVtxosByScripts([.. contracts.Select(c => c.Script)],
+            cancellationToken: cancellationToken);
+        var vtxosByContracts =
+            vtxos
+                .GroupBy(v => contractByScript[v.Script]);
+
+        HashSet<ArkPsbtSigner> coins = [];
+        foreach (var vtxosByContract in vtxosByContracts)
+        {
+            foreach (var vtxo in vtxosByContract)
+            {
+                try
+                {
+                    coins.Add(
+                        await signingService.GetVtxoPsbtSignerByContract(vtxosByContract.Key, vtxo, cancellationToken));
+                }
+                catch (AdditionalInformationRequiredException)
+                {
+                    // This is probably a VHTLC contract which needs to be explicitly used by sweeper
+                }
+            }
+        }
+
+        return coins;
+    }
+
     public async Task<uint256> Spend(string walletId, ArkTxOut[] outputs, CancellationToken cancellationToken = default)
     {
         var serverInfo = await transport.GetServerInfoAsync(cancellationToken);

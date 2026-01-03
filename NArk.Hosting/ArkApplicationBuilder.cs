@@ -45,8 +45,11 @@ public static class AppExtensions
                 services.AddSingleton<IContractService, ContractService>();
                 services.AddSingleton<VtxoSynchronizationService>();
                 services.AddSingleton<IntentGenerationService>();
+                services.AddSingleton<IIntentGenerationService, IntentGenerationService>(
+                    s => s.GetRequiredService<IntentGenerationService>());
                 services.AddSingleton<IntentSynchronizationService>();
                 services.AddSingleton<BatchManagementService>();
+                services.AddSingleton<IOnchainService, OnchainService>();
                 services.AddSingleton<SweeperService>();
                 services.AddSingleton<IFeeEstimator, DefaultFeeEstimator>();
                 services.AddHostedService<ArkHostedLifecycle>();
