@@ -45,12 +45,17 @@ public partial class GrpcClientTransport
             ForfeitPubKey: fPubKey,
             CheckpointTapScript: serverUnrollScript,
             FeeTerms: new ArkOperatorFeeTerms(
-                TxFeeRate: response.Fees.TxFeeRate,
-                IntentOffchainOutput: response.Fees.IntentFee.OffchainOutput,
-                IntentOnchainOutput: response.Fees.IntentFee.OnchainOutput,
-                IntentOffchainInput: response.Fees.IntentFee.OffchainInput,
-                IntentOnchainInput: response.Fees.IntentFee.OnchainInput
+                TxFeeRate: GetOrZero(response.Fees.TxFeeRate),
+                IntentOffchainOutput: GetOrZero(response.Fees.IntentFee.OffchainOutput),
+                IntentOnchainOutput: GetOrZero(response.Fees.IntentFee.OnchainOutput),
+                IntentOffchainInput: GetOrZero(response.Fees.IntentFee.OffchainInput),
+                IntentOnchainInput: GetOrZero(response.Fees.IntentFee.OnchainInput)
             )
         );
+    }
+
+    private static string GetOrZero(string feeTern)
+    {
+        return string.IsNullOrWhiteSpace(feeTern) ? "0.0" : feeTern;
     }
 }

@@ -137,6 +137,10 @@ var ark =
         .WithEnvironment("ARKD_LIVE_STORE_TYPE", "inmemory")
         .WithEnvironment("ARKD_UNLOCKER_TYPE", "env")
         .WithEnvironment("ARKD_UNLOCKER_PASSWORD", "secret")
+        .WithEnvironment("ARKD_INTENT_OFFCHAIN_INPUT_FEE_PROGRAM", "200.0")
+        .WithEnvironment("ARKD_INTENT_ONCHAIN_INPUT_FEE_PROGRAM", "0.01 * amount")
+        .WithEnvironment("ARKD_INTENT_OFFCHAIN_OUTPUT_FEE_PROGRAM", "0.0")
+        .WithEnvironment("ARKD_INTENT_ONCHAIN_OUTPUT_FEE_PROGRAM", "200.0")
         .WithOtlpExporter(OtlpProtocol.HttpProtobuf)
         .WithEnvironment(callback =>
         {

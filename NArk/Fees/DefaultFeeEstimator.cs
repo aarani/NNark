@@ -35,7 +35,7 @@ public class DefaultFeeEstimator(IClientTransport clientTransport) : IFeeEstimat
         return (long)Math.Ceiling(totalFee);
     }
 
-    private decimal GetOutputFee(CelProgramDelegate feeFunc, ArkTxOut txOut)
+    private double GetOutputFee(CelProgramDelegate feeFunc, ArkTxOut txOut)
     {
         var vars = new Dictionary<string, object?>
         {
@@ -43,9 +43,9 @@ public class DefaultFeeEstimator(IClientTransport clientTransport) : IFeeEstimat
             { "script", txOut.ScriptPubKey.ToHex() }
         };
 
-        return (decimal)feeFunc.Invoke(vars)!;
+        return (double)feeFunc.Invoke(vars)!;
     }
-    private decimal GetInputFee(CelProgramDelegate offchainInputFeeFunc, ArkCoinLite arkCoin)
+    private double GetInputFee(CelProgramDelegate offchainInputFeeFunc, ArkCoinLite arkCoin)
     {
         var vars = new Dictionary<string, object?>
         {
@@ -56,6 +56,6 @@ public class DefaultFeeEstimator(IClientTransport clientTransport) : IFeeEstimat
             { "weight", 0 }
         };
 
-        return (decimal)offchainInputFeeFunc.Invoke(vars)!;
+        return (double)offchainInputFeeFunc.Invoke(vars)!;
     }
 }
