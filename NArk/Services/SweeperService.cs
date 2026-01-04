@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NArk.Abstractions.Contracts;
 using NArk.Abstractions.VTXOs;
@@ -23,7 +24,8 @@ public class SweeperService(
     IContractStorage contractStorage,
     ISpendingService spendingService,
     IOptions<SweeperServiceOptions> options,
-    IEnumerable<IEventHandler<PostSweepActionEvent>> postSweepHandlers) : IAsyncDisposable
+    IEnumerable<IEventHandler<PostSweepActionEvent>> postSweepHandlers,
+    ILogger<SweeperService>? logger = null) : IAsyncDisposable
 {
     public SweeperService(
         IWallet wallet,
@@ -33,7 +35,20 @@ public class SweeperService(
         IContractStorage contractStorage,
         ISpendingService spendingService,
         IOptions<SweeperServiceOptions> options)
-            : this(wallet, clientTransport, policies, vtxoStorage, contractStorage, spendingService, options, [])
+            : this(wallet, clientTransport, policies, vtxoStorage, contractStorage, spendingService, options, [], null)
+    {
+    }
+
+    public SweeperService(
+        IWallet wallet,
+        IClientTransport clientTransport,
+        IEnumerable<ISweepPolicy> policies,
+        IVtxoStorage vtxoStorage,
+        IContractStorage contractStorage,
+        ISpendingService spendingService,
+        IOptions<SweeperServiceOptions> options,
+        ILogger<SweeperService> logger)
+            : this(wallet, clientTransport, policies, vtxoStorage, contractStorage, spendingService, options, [], logger)
     {
     }
 
@@ -51,6 +66,7 @@ public class SweeperService(
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        logger?.LogInformation("Starting sweeper service");
         var multiToken = CancellationTokenSource.CreateLinkedTokenSource(_shutdownCts.Token, cancellationToken);
         _serverInfo = await clientTransport.GetServerInfoAsync(cancellationToken);
         _sweeperTask = DoSweepingLoop(multiToken.Token);
@@ -59,6 +75,7 @@ public class SweeperService(
         if (options.Value.ForceRefreshInterval != TimeSpan.Zero)
             _timer = new Timer(_ => _sweepJobTrigger.Writer.TryWrite(new SweepTimerTrigger()), null, TimeSpan.Zero,
                 options.Value.ForceRefreshInterval);
+        logger?.LogDebug("Sweeper service started with refresh interval {Interval}", options.Value.ForceRefreshInterval);
     }
 
     private async Task DoSweepingLoop(CancellationToken loopShutdownToken)
@@ -127,7 +144,8 @@ public class SweeperService(
 
     private async Task Sweep(Dictionary<OutPoint, PriorityQueue<ArkCoin, int>> outpointToCoins)
     {
-        foreach (var (_, possiblePaths) in outpointToCoins)
+        logger?.LogDebug("Starting sweep for {OutpointCount} outpoints", outpointToCoins.Count);
+        foreach (var (outpoint, possiblePaths) in outpointToCoins)
         {
             while (possiblePaths.Count > 0)
             {
@@ -138,12 +156,14 @@ public class SweeperService(
                 {
                     var txId = await spendingService.Spend(possiblePath.WalletIdentifier, [psbtSigner], [],
                         CancellationToken.None);
+                    logger?.LogInformation("Sweep successful for outpoint {Outpoint}, txId: {TxId}", outpoint, txId);
                     await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(psbtSigner.Coin, txId,
                         ActionState.Successful, null));
                     break;
                 }
-                catch (AlreadyLockedVtxoException)
+                catch (AlreadyLockedVtxoException ex)
                 {
+                    logger?.LogWarning(0, ex, "Sweep skipped for outpoint {Outpoint}: vtxo is already locked", outpoint);
                     await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(psbtSigner.Coin, null,
                         ActionState.Failed, "Vtxo is already locked by another process."));
                     break;
@@ -152,9 +172,13 @@ public class SweeperService(
                 {
                     if (possiblePaths.Count == 0)
                     {
+                        logger?.LogError(0, ex, "All sweep paths failed for outpoint {Outpoint}", outpoint);
                         await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(psbtSigner.Coin, null,
                             ActionState.Failed, $"All sweeping paths failed, ex: {ex}"));
-                        //TODO: log
+                    }
+                    else
+                    {
+                        logger?.LogDebug(0, ex, "Sweep path failed for outpoint {Outpoint}, trying next path ({RemainingPaths} remaining)", outpoint, possiblePaths.Count);
                     }
                 }
             }
@@ -180,6 +204,7 @@ public class SweeperService(
 
     public async ValueTask DisposeAsync()
     {
+        logger?.LogDebug("Disposing sweeper service");
         vtxoStorage.VtxosChanged -= OnVtxosChanged;
         contractStorage.ContractsChanged -= OnContractsChanged;
 
@@ -188,18 +213,18 @@ public class SweeperService(
             if (_timer is not null)
                 await _timer.DisposeAsync();
         }
-        catch
+        catch (Exception ex)
         {
-            // ignored
+            logger?.LogDebug(0, ex, "Error disposing timer during sweeper service shutdown");
         }
 
         try
         {
             await _shutdownCts.CancelAsync();
         }
-        catch
+        catch (Exception ex)
         {
-            // ignored
+            logger?.LogDebug(0, ex, "Error cancelling shutdown token during sweeper service shutdown");
         }
 
         try
@@ -207,9 +232,11 @@ public class SweeperService(
             if (_sweeperTask is not null)
                 await _sweeperTask;
         }
-        catch
+        catch (Exception ex)
         {
-            // ignored
+            logger?.LogDebug(0, ex, "Sweeper task completed with error during shutdown");
         }
+
+        logger?.LogInformation("Sweeper service disposed");
     }
 }

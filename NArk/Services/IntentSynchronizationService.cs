@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
 using NArk.Enums;
@@ -12,14 +13,23 @@ public class IntentSynchronizationService(
     IIntentStorage intentStorage,
     IClientTransport clientTransport,
     ISafetyService safetyService,
-    IEnumerable<IEventHandler<PostIntentSubmissionEvent>> eventHandlers) : IAsyncDisposable
+    IEnumerable<IEventHandler<PostIntentSubmissionEvent>> eventHandlers,
+    ILogger<IntentSynchronizationService>? logger = null) : IAsyncDisposable
 {
 
     public IntentSynchronizationService(IIntentStorage intentStorage,
         IClientTransport clientTransport,
-        ISafetyService safetyService) : this(intentStorage, clientTransport, safetyService, [])
+        ISafetyService safetyService) : this(intentStorage, clientTransport, safetyService, [], null)
     {
-        
+
+    }
+
+    public IntentSynchronizationService(IIntentStorage intentStorage,
+        IClientTransport clientTransport,
+        ISafetyService safetyService,
+        ILogger<IntentSynchronizationService> logger) : this(intentStorage, clientTransport, safetyService, [], logger)
+    {
+
     }
     
     private readonly CancellationTokenSource _shutdownCts = new();
@@ -29,6 +39,7 @@ public class IntentSynchronizationService(
 
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
+        logger?.LogInformation("Starting intent synchronization service");
         intentStorage.IntentChanged += OnIntentChanged;
         var multiToken = CancellationTokenSource.CreateLinkedTokenSource(_shutdownCts.Token, cancellationToken);
         _intentSubmitLoop = DoIntentSubmitLoop(multiToken.Token);
@@ -63,16 +74,20 @@ public class IntentSynchronizationService(
         }
         catch (OperationCanceledException)
         {
-
+            logger?.LogDebug("Intent submit loop cancelled");
         }
     }
 
     private async Task SubmitIntent(ArkIntent intentToSubmit, CancellationToken token)
     {
+        logger?.LogDebug("Submitting intent {IntentId}", intentToSubmit.InternalId);
         await using var @lock = await safetyService.LockKeyAsync($"intent::{intentToSubmit.InternalId}", token);
         var intentAfterLock = await intentStorage.GetIntentByInternalId(intentToSubmit.InternalId, token);
         if (intentAfterLock is null)
+        {
+            logger?.LogError("Intent {IntentId} disappeared from storage mid-action", intentToSubmit.InternalId);
             throw new Exception("Should not happen, intent disappeared from storage mid-action");
+        }
 
         try
         {
@@ -92,11 +107,13 @@ public class IntentSynchronizationService(
                         UpdatedAt = now
                     }, token);
 
+                logger?.LogInformation("Intent {IntentId} registered successfully with server intent id {ServerIntentId}", intentToSubmit.InternalId, intentId);
                 await eventHandlers.SafeHandleEventAsync(new PostIntentSubmissionEvent(intentAfterLock, now, true,
                     ActionState.Successful, null), token);
             }
-            catch (AlreadyLockedVtxoException)
+            catch (AlreadyLockedVtxoException ex)
             {
+                logger?.LogWarning(0, ex, "Intent {IntentId} vtxo already locked, deleting and re-registering", intentToSubmit.InternalId);
                 await clientTransport.DeleteIntent(intentAfterLock, token);
 
                 var intentId =
@@ -113,14 +130,16 @@ public class IntentSynchronizationService(
                         UpdatedAt = now
                     }, token);
 
+                logger?.LogInformation("Intent {IntentId} re-registered successfully after deletion", intentToSubmit.InternalId);
                 await eventHandlers.SafeHandleEventAsync(new PostIntentSubmissionEvent(intentAfterLock, now, false,
                     ActionState.Successful, null), token);
             }
         }
         catch (Exception ex)
         {
+            logger?.LogError(0, ex, "Intent {IntentId} submission failed", intentToSubmit.InternalId);
             var now = DateTimeOffset.UtcNow;
-            
+
             await intentStorage.SaveIntent(
                 intentAfterLock.WalletId,
                 intentAfterLock with
@@ -128,7 +147,7 @@ public class IntentSynchronizationService(
                     State = ArkIntentState.Cancelled,
                     UpdatedAt = now
                 }, token);
-            
+
             await eventHandlers.SafeHandleEventAsync(new PostIntentSubmissionEvent(intentAfterLock, now, false,
                 ActionState.Failed, $"Intent submission failed with ex: {ex}"), token);
         }
@@ -136,6 +155,7 @@ public class IntentSynchronizationService(
 
     public async ValueTask DisposeAsync()
     {
+        logger?.LogDebug("Disposing intent synchronization service");
         intentStorage.IntentChanged -= OnIntentChanged;
 
         await _shutdownCts.CancelAsync();
@@ -147,8 +167,10 @@ public class IntentSynchronizationService(
         }
         catch (OperationCanceledException)
         {
-            // ignored
+            logger?.LogDebug("Intent submit loop cancelled during disposal");
         }
+
+        logger?.LogInformation("Intent synchronization service disposed");
     }
 
     

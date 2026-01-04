@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
 using NArk.Abstractions.Contracts;
 using NArk.Abstractions.VTXOs;
 using NArk.Abstractions.Wallets;
@@ -25,6 +26,17 @@ public class VtxoSynchronizationService : IAsyncDisposable
     private readonly IVtxoStorage _vtxoStorage;
     private readonly IContractStorage _contractStorage;
     private readonly IClientTransport _arkClientTransport;
+    private readonly ILogger<VtxoSynchronizationService>? _logger;
+
+    public VtxoSynchronizationService(IWalletStorage walletStorage,
+        IVtxoStorage vtxoStorage,
+        IContractStorage contractStorage,
+        IClientTransport arkClientTransport,
+        ILogger<VtxoSynchronizationService> logger)
+        : this(walletStorage, vtxoStorage, contractStorage, arkClientTransport)
+    {
+        _logger = logger;
+    }
 
     public VtxoSynchronizationService(IWalletStorage walletStorage,
         IVtxoStorage vtxoStorage,
@@ -48,11 +60,11 @@ public class VtxoSynchronizationService : IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
-            // ignored
+            _logger?.LogDebug("Vtxo change handler cancelled");
         }
-        catch
+        catch (Exception ex)
         {
-            // ignored
+            _logger?.LogWarning(0, ex, "Error handling vtxo change event");
         }
     }
 
@@ -64,16 +76,17 @@ public class VtxoSynchronizationService : IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
-            // ignored
+            _logger?.LogDebug("Contract change handler cancelled");
         }
-        catch
+        catch (Exception ex)
         {
-            // ignored
+            _logger?.LogWarning(0, ex, "Error handling contract change event");
         }
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        _logger?.LogInformation("Starting VTXO synchronization service");
         var multiToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
         _queryTask = StartQueryLogic(multiToken.Token);
         await UpdateScriptsView(multiToken.Token);
@@ -102,7 +115,10 @@ public class VtxoSynchronizationService : IAsyncDisposable
 
             // We already have a stream with this exact script list
             if (newViewOfScripts.SetEquals(_lastViewOfScripts) && _streamTask is not null && !_streamTask.IsCompleted)
+            {
+                _logger?.LogDebug("Scripts view unchanged, skipping stream restart");
                 return;
+            }
 
             try
             {
@@ -111,9 +127,9 @@ public class VtxoSynchronizationService : IAsyncDisposable
                 if (_streamTask is not null)
                     await _streamTask;
             }
-            catch
+            catch (Exception ex)
             {
-                // ignored
+                _logger?.LogDebug(0, ex, "Error cancelling previous stream during scripts view update");
             }
 
             _lastViewOfScripts = newViewOfScripts;
@@ -131,6 +147,7 @@ public class VtxoSynchronizationService : IAsyncDisposable
 
     private async Task StartStreamLogic(HashSet<string> scripts, CancellationToken token)
     {
+        _logger?.LogDebug("Starting stream logic for {ScriptCount} scripts", scripts.Count);
         try
         {
             var restartableToken =
@@ -140,13 +157,14 @@ public class VtxoSynchronizationService : IAsyncDisposable
                 await _readyToPoll.Writer.WriteAsync(vtxosToPoll, restartableToken.Token);
             }
         }
-        catch when (!token.IsCancellationRequested)
+        catch (Exception ex) when (!token.IsCancellationRequested)
         {
+            _logger?.LogWarning(0, ex, "Stream logic failed, restarting scripts view");
             await UpdateScriptsView(_shutdownCts.Token);
         }
-        catch
+        catch (Exception ex)
         {
-            // ignored
+            _logger?.LogDebug(0, ex, "Stream logic cancelled");
         }
     }
 
@@ -164,6 +182,7 @@ public class VtxoSynchronizationService : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _logger?.LogDebug("Disposing VTXO synchronization service");
         await _shutdownCts.CancelAsync();
 
         try
@@ -173,7 +192,7 @@ public class VtxoSynchronizationService : IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
-
+            _logger?.LogDebug("Query task cancelled during disposal");
         }
         try
         {
@@ -182,8 +201,9 @@ public class VtxoSynchronizationService : IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
-
+            _logger?.LogDebug("Stream task cancelled during disposal");
         }
 
+        _logger?.LogInformation("VTXO synchronization service disposed");
     }
 }

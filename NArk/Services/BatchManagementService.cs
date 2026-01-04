@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
 using NArk.Abstractions.Batches;
 using NArk.Abstractions.Batches.ServerEvents;
 using NArk.Abstractions.Intents;
@@ -31,7 +32,8 @@ public class BatchManagementService(
     IVtxoStorage vtxoStorage,
     ISigningService signingService,
     ISafetyService safetyService,
-    IEnumerable<IEventHandler<PostBatchSessionEvent>> eventHandlers)
+    IEnumerable<IEventHandler<PostBatchSessionEvent>> eventHandlers,
+    ILogger<BatchManagementService>? logger = null)
     : IAsyncDisposable
 {
     private record BatchSessionWithConnectionId(
@@ -74,6 +76,7 @@ public class BatchManagementService(
     {
         await foreach (var triggerReason in _triggerChannel.Reader.ReadAllAsync(cancellationToken))
         {
+            logger?.LogInformation("Received trigger in EventStreamController: {TriggerReason}", triggerReason);
             await _connectionManipulationSemaphore.WaitAsync(cancellationToken);
             try
             {
@@ -84,7 +87,17 @@ public class BatchManagementService(
                     {
                         if (!_connections.TryGetValue(connId, out var connection)) continue;
 
-                        _ = connection.CancellationTokenSource.CancelAsync();
+                        logger?.LogInformation("Closing unreserved connection {ConnectionId}", connId);
+
+                        try
+                        {
+                            _ = connection.CancellationTokenSource.CancelAsync();
+                        }
+                        catch (Exception ex)
+                        {
+                            logger?.LogDebug(0, ex, "Failed to cancel connection {ConnectionId}", connId);
+                        }
+
                         _connections.Remove(connId);
                         _isReservedConnections.Remove(connId);
                     }
@@ -114,8 +127,14 @@ public class BatchManagementService(
     {
         foreach (var intent in await intentStorage.GetActiveIntents(cancellationToken))
         {
-            if (intent.IntentId is not null)
-                _activeIntents[intent.IntentId] = intent;
+            if (intent.IntentId is null)
+            {
+                logger?.LogDebug("Skipping intent with null IntentId (InternalId: {InternalId})", intent.InternalId);
+                continue;
+            }
+
+            logger?.LogInformation("Loaded active intent {IntentId} in state {State}", intent.IntentId, intent.State);
+            _activeIntents[intent.IntentId] = intent;
         }
     }
 
@@ -156,11 +175,11 @@ public class BatchManagementService(
             }
             catch (OperationCanceledException)
             {
-                //logger.LogInformation("Stream was cancelled, possibly switching to a new stream...");
+                logger?.LogInformation("Stream was cancelled, possibly switching to a new stream...");
             }
-            catch
+            catch (Exception ex)
             {
-                //logger.LogError(ex, "Error in shared event stream, restarting in {Seconds} seconds", EventStreamRetryDelay.TotalSeconds);
+                logger?.LogError(0, ex, "Error in shared event stream, restarting in {Seconds} seconds", EventStreamRetryDelay.TotalSeconds);
                 await Task.Delay(EventStreamRetryDelay, cancellationToken);
             }
             finally
@@ -241,9 +260,9 @@ public class BatchManagementService(
                         break;
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                //TODO: log
+                logger?.LogCritical(0, ex, "Error processing event {EventType} for intent {IntentId}", eventResponse.GetType().Name, intentId);
             }
         }
     }
@@ -337,6 +356,7 @@ public class BatchManagementService(
 
                 if (spendableCoins.Count == 0)
                 {
+                    logger?.LogWarning("No spendable coins found for intent {IntentId}", intentId);
                     continue;
                 }
 
@@ -373,7 +393,7 @@ public class BatchManagementService(
                     serverInfo.Network,
                     signer,
                     intent,
-                    spendableCoins.ToArray(),
+                    [.. spendableCoins],
                     batchEvent);
 
                 await session.InitializeAsync(cancellationToken);
@@ -395,9 +415,9 @@ public class BatchManagementService(
 
                 _ = RunSharedEventStreamController(_serviceCts!.Token);
             }
-            catch
+            catch (Exception ex)
             {
-                // ignored
+                logger?.LogWarning(0, ex, "Failed to handle batch started event for intent {IntentId}", intentId);
             }
         }
     }
@@ -465,41 +485,41 @@ public class BatchManagementService(
             if (_serviceCts is not null)
                 await _serviceCts.CancelAsync();
         }
-        catch (ObjectDisposedException)
+        catch (ObjectDisposedException ex)
         {
-            // Already disposed, ignore
+            logger?.LogDebug(0, ex, "Service CancellationTokenSource already disposed during cleanup");
         }
 
         await _connectionManipulationSemaphore.WaitAsync();
         try
         {
-            foreach (var (_, connection) in _connections)
+            foreach (var (connId, connection) in _connections)
             {
                 try
                 {
                     await connection.CancellationTokenSource.CancelAsync();
                 }
-                catch (ObjectDisposedException)
+                catch (ObjectDisposedException ex)
                 {
-                    // ignored
+                    logger?.LogDebug(0, ex, "Connection {ConnectionId} CancellationTokenSource already disposed", connId);
                 }
 
                 try
                 {
                     await connection.ConnectionTask;
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // ignored
+                    logger?.LogDebug(0, ex, "Connection {ConnectionId} task completed with error during disposal", connId);
                 }
 
                 try
                 {
                     connection.CancellationTokenSource.Dispose();
                 }
-                catch (ObjectDisposedException)
+                catch (ObjectDisposedException ex)
                 {
-                    // ignored
+                    logger?.LogDebug(0, ex, "Connection {ConnectionId} CancellationTokenSource already disposed during cleanup", connId);
                 }
             }
         }
@@ -513,9 +533,9 @@ public class BatchManagementService(
         {
             _connectionManipulationSemaphore.Dispose();
         }
-        catch (ObjectDisposedException)
+        catch (ObjectDisposedException ex)
         {
-            // Already disposed, ignore
+            logger?.LogDebug(0, ex, "Connection manipulation semaphore already disposed during cleanup");
         }
 
         _serviceCts?.Dispose();
@@ -532,7 +552,18 @@ public class BatchManagementService(
         IVtxoStorage vtxoStorage,
         ISigningService signingService,
         ISafetyService safetyService)
-        : this(intentStorage, arkWalletService, clientTransport, vtxoStorage, signingService, safetyService, [])
+        : this(intentStorage, arkWalletService, clientTransport, vtxoStorage, signingService, safetyService, [], null)
+    {
+    }
+
+    public BatchManagementService(IIntentStorage intentStorage,
+        IWallet arkWalletService,
+        IClientTransport clientTransport,
+        IVtxoStorage vtxoStorage,
+        ISigningService signingService,
+        ISafetyService safetyService,
+        ILogger<BatchManagementService> logger)
+        : this(intentStorage, arkWalletService, clientTransport, vtxoStorage, signingService, safetyService, [], logger)
     {
     }
 }

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using NArk.Abstractions;
 using NArk.Abstractions.Fees;
 using NArk.Abstractions.Intents;
@@ -8,15 +9,19 @@ using NBitcoin;
 
 namespace NArk.Services;
 
-public class OnchainService(IClientTransport clientTransport, IContractService contractService, ISpendingService spendingService, ISigningService signingService, IIntentGenerationService intentGenerationService, IFeeEstimator feeEstimator) : IOnchainService
+public class OnchainService(IClientTransport clientTransport, IContractService contractService, ISpendingService spendingService, ISigningService signingService, IIntentGenerationService intentGenerationService, IFeeEstimator feeEstimator, ILogger<OnchainService>? logger = null) : IOnchainService
 {
     public async Task<Guid> InitiateCollaborativeExit(string walletId, ArkTxOut output,
         CancellationToken cancellationToken = default)
     {
+        logger?.LogDebug("Initiating collaborative exit for wallet {WalletId} with output value {Value}", walletId, output.Value);
         var serverInfo = await clientTransport.GetServerInfoAsync(cancellationToken);
-        
+
         if (output.Value < serverInfo.Dust)
+        {
+            logger?.LogWarning("Collaborative exit rejected for wallet {WalletId}: output value {Value} is below dust threshold {Dust}", walletId, output.Value, serverInfo.Dust);
             throw new InvalidOperationException("Output value is below dust threshold.");
+        }
         
         var availableCoins =
             await spendingService.GetAvailableCoins(walletId, cancellationToken);
@@ -33,7 +38,7 @@ public class OnchainService(IClientTransport clientTransport, IContractService c
             var change = totalInput - output.Value;
 
             var estimatedFeeIfChange = await feeEstimator.EstimateFeeAsync(
-                selectedCoins.Select(c => c.Coin.ToLite()).ToArray(),
+                [.. selectedCoins.Select(c => c.Coin.ToLite())],
                 [
                     output,
                     new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!)
@@ -51,7 +56,7 @@ public class OnchainService(IClientTransport clientTransport, IContractService c
             else
             {
                 var estimatedFeeIfNoChange = await feeEstimator.EstimateFeeAsync(
-                    selectedCoins.Select(c => c.Coin.ToLite()).ToArray(),
+                    [.. selectedCoins.Select(c => c.Coin.ToLite())],
                     [output],
                     cancellationToken);
 
@@ -78,10 +83,17 @@ public class OnchainService(IClientTransport clientTransport, IContractService c
 
     public async Task<Guid> InitiateCollaborativeExit(ArkPsbtSigner[] inputs, ArkTxOut[] outputs, CancellationToken cancellationToken = default)
     {
+        logger?.LogDebug("Initiating collaborative exit with {InputCount} inputs and {OutputCount} outputs", inputs.Length, outputs.Length);
         if (outputs.All(o => o.Type == ArkTxOutType.Vtxo))
+        {
+            logger?.LogWarning("Collaborative exit rejected: no on-chain outputs provided");
             throw new InvalidOperationException("No on-chain outputs provided for collaborative exit.");
+        }
         if (inputs.Select(i => i.Coin.WalletIdentifier).Distinct().Count() != 1)
+        {
+            logger?.LogWarning("Collaborative exit rejected: inputs belong to multiple wallets");
             throw new InvalidOperationException("All inputs must belong to the same wallet for collaborative exit.");
+        }
         
         var inputSigners =
             inputs.ToDictionary(signer => signer.Coin.ToLite(), signer => signer);
@@ -96,6 +108,7 @@ public class OnchainService(IClientTransport clientTransport, IContractService c
         var intent =
             await intentGenerationService.GenerateManualIntent(inputs[0].Coin.WalletIdentifier, intentSpec, inputSigners, cancellationToken);
 
+        logger?.LogInformation("Collaborative exit initiated for wallet {WalletId} with intent {IntentId}", inputs[0].Coin.WalletIdentifier, intent);
         return intent;
     }
 }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NArk.Abstractions;
 using NArk.Abstractions.Contracts;
@@ -23,13 +24,15 @@ public class IntentGenerationService(
     IContractStorage contractStorage,
     IVtxoStorage vtxoStorage,
     IIntentScheduler intentScheduler,
-    IOptions<IntentGenerationServiceOptions>? options = null
+    IOptions<IntentGenerationServiceOptions>? options = null,
+    ILogger<IntentGenerationService>? logger = null
 ) : IIntentGenerationService, IAsyncDisposable
 {
     private readonly CancellationTokenSource _shutdownCts = new();
     private Task? _generationTask;
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
+        logger?.LogInformation("Starting intent generation service");
         var multiToken = CancellationTokenSource.CreateLinkedTokenSource(_shutdownCts.Token, cancellationToken);
         _generationTask = DoGenerationLoop(multiToken.Token);
         return Task.CompletedTask;
@@ -79,19 +82,25 @@ public class IntentGenerationService(
         }
         catch (OperationCanceledException)
         {
-            // ignored
+            logger?.LogDebug("Intent generation loop cancelled");
+        }
+        catch (Exception ex)
+        {
+            logger?.LogError(0, ex, "Intent generation loop failed with unexpected error");
         }
     }
 
     private async Task<Guid> GenerateIntentFromSpec(string walletId, ArkIntentSpec intentSpec, Dictionary<ArkCoinLite, ArkPsbtSigner> signers, CancellationToken token)
     {
+        logger?.LogDebug("Generating intent from spec for wallet {WalletId} with {CoinCount} coins", walletId, intentSpec.Coins.Length);
         ArkServerInfo serverInfo = await clientTransport.GetServerInfoAsync(token);
         var outputsSum = intentSpec.Outputs.Sum(o => o.Value);
         var inputsSum = intentSpec.Coins.Sum(c => c.Amount);
         var fee = await feeEstimator.EstimateFeeAsync(intentSpec, token);
-        
+
         if (outputsSum - inputsSum < fee)
         {
+            logger?.LogWarning("Intent generation failed for wallet {WalletId}: fees not properly considered, missing {MissingAmount} sats", walletId, inputsSum + fee - outputsSum);
             throw new InvalidOperationException(
                 $"Scheduler is not considering fees properly, missing fees by {inputsSum + fee - outputsSum} sats");
         }
@@ -99,7 +108,10 @@ public class IntentGenerationService(
         var overlappingIntents =
             await intentStorage.GetIntentsByInputs(walletId, [.. intentSpec.Coins.Select(c => c.Outpoint)], true, token);
         if (overlappingIntents.Count != 0)
+        {
+            logger?.LogDebug("Intent generation skipped for wallet {WalletId}: overlapping intents exist", walletId);
             return Guid.Empty;
+        }
 
         var intentTxs = await CreateIntents(
             serverInfo.Network,
@@ -120,6 +132,7 @@ public class IntentGenerationService(
                 intentSpec.Coins.Select(c => c.Outpoint).ToArray(),
                 (await signers[intentSpec.Coins[0]].SigningEntity.GetOutputDescriptor(token)).ToString()), token);
 
+        logger?.LogInformation("Generated intent {IntentId} for wallet {WalletId}", internalId, walletId);
         return internalId;
     }
 
@@ -240,19 +253,26 @@ public class IntentGenerationService(
 
     public async ValueTask DisposeAsync()
     {
+        logger?.LogDebug("Disposing intent generation service");
         await _shutdownCts.CancelAsync();
 
         if (_generationTask is not null)
             await _generationTask;
+
+        logger?.LogInformation("Intent generation service disposed");
     }
 
     public async Task<Guid> GenerateManualIntent(string walletId, ArkIntentSpec spec, Dictionary<ArkCoinLite, ArkPsbtSigner> signers, CancellationToken cancellationToken)
     {
+        logger?.LogDebug("Generating manual intent for wallet {WalletId}", walletId);
         var internalId = await GenerateIntentFromSpec(walletId, spec, signers, cancellationToken);
-        
+
         if (internalId == Guid.Empty)
+        {
+            logger?.LogWarning("Manual intent generation failed for wallet {WalletId}: pending intents exist", walletId);
             throw new InvalidOperationException("Could not create intent, pending intents exist");
-        
+        }
+
         return internalId;
     }
 }

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NArk.Abstractions;
 using NArk.Abstractions.Blockchain;
@@ -9,16 +10,24 @@ using NBitcoin;
 
 namespace NArk.Services;
 
-public class SimpleIntentScheduler(IFeeEstimator feeEstimator,  IClientTransport clientTransport, IContractService contractService, IChainTimeProvider chainTimeProvider, IOptions<SimpleIntentSchedulerOptions> options) : IIntentScheduler
+public class SimpleIntentScheduler(IFeeEstimator feeEstimator, IClientTransport clientTransport, IContractService contractService, IChainTimeProvider chainTimeProvider, IOptions<SimpleIntentSchedulerOptions> options, ILogger<SimpleIntentScheduler>? logger = null) : IIntentScheduler
 {
     public async Task<IReadOnlyCollection<ArkIntentSpec>> GetIntentsToSubmit(
         IReadOnlyCollection<ArkCoinLite> unspentVtxos, CancellationToken cancellationToken = default)
     {
+        logger?.LogDebug("Getting intents to submit for {VtxoCount} unspent vtxos", unspentVtxos.Count);
         ArgumentNullException.ThrowIfNull(chainTimeProvider);
         if (options.Value.ThresholdHeight is null && options.Value.Threshold is null)
+        {
+            logger?.LogError("SimpleIntentScheduler misconfigured: either thresholdHeight or threshold is required");
             throw new ArgumentNullException("Either thresholdHeight or threshold is required");
+        }
 
-        if (unspentVtxos.Count == 0) return [];
+        if (unspentVtxos.Count == 0)
+        {
+            logger?.LogDebug("No unspent vtxos to process");
+            return [];
+        }
 
         var serverInfo = await clientTransport.GetServerInfoAsync(cancellationToken);
         var chainTime = await chainTimeProvider.GetChainTime(cancellationToken);
@@ -54,10 +63,16 @@ public class SimpleIntentScheduler(IFeeEstimator feeEstimator,  IClientTransport
             var inputsSumAfterAfterFees = inputsSumAfterBeforeFees - fees;
             
             if (inputsSumAfterAfterFees < Money.Zero)
+            {
+                logger?.LogDebug("Skipping wallet {WalletId}: inputs sum after fees is negative", g.Key);
                 continue;
+            }
             if (inputsSumAfterBeforeFees < serverInfo.Dust)
+            {
+                logger?.LogWarning("Wallet {WalletId} has inputs below dust threshold - not implemented", g.Key);
                 throw new NotImplementedException();
-            
+            }
+
             var finalSpec =
                 new ArkIntentSpec(
                     g.ToArray(),
@@ -73,8 +88,10 @@ public class SimpleIntentScheduler(IFeeEstimator feeEstimator,  IClientTransport
                 );
             
             intentSpecs.Add(finalSpec);
+            logger?.LogDebug("Created intent spec for wallet {WalletId} with {CoinCount} coins", g.Key, g.Count());
         }
 
+        logger?.LogDebug("Generated {IntentSpecCount} intent specs", intentSpecs.Count);
         return intentSpecs;
 
     }
