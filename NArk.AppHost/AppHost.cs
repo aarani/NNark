@@ -20,6 +20,26 @@ var bitcoin =
         .WithEndpoint(port: 18444, targetPort: 18444, protocol: ProtocolType.Tcp, name: "rpcport")
         .WithEndpoint(28332, 28332, protocol: ProtocolType.Tcp, name: "zmqpub-block")
         .WithEndpoint(28333, 28333, protocol: ProtocolType.Tcp, name: "zmqpub-tx")
+        .WithCommand("generate-blocks", "Generate blocks", async context =>
+        {
+            var generateProcess =
+                await Cli.Wrap("docker")
+                .WithArguments(["exec", "bitcoin", "bitcoin-cli", "-rpcwallet=", "-generate", "20"])
+                .WithValidation(CommandResultValidation.None)
+                .ExecuteBufferedAsync(context.CancellationToken);
+
+            if (!generateProcess.IsSuccess)
+            {
+                return new ExecuteCommandResult()
+                {
+                    Success = false,
+                    ErrorMessage =
+                        $"Block generation failed, output = {generateProcess.StandardOutput}, error = {generateProcess.StandardError}"
+                };
+            }
+
+            return new ExecuteCommandResult() { Success = true };
+        })
         .WithVolume("nark-bitcoind", target: "/data/.bitcoin")
         .WithContainerFiles("/data/.bitcoin/", "Assets/bitcoin.conf");
 
@@ -129,9 +149,9 @@ var ark =
         .WithEnvironment("ARKD_WALLET_ADDR", "ark-wallet:6060")
         .WithEnvironment("ARKD_ESPLORA_URL", "http://chopsticks:3000")
         .WithEnvironment("ARKD_VTXO_MIN_AMOUNT", "1")
-        .WithEnvironment("ARKD_VTXO_TREE_EXPIRY", "1024")
-        .WithEnvironment("ARKD_UNILATERAL_EXIT_DELAY", "512")
-        .WithEnvironment("ARKD_BOARDING_EXIT_DELAY", "2048")
+        .WithEnvironment("ARKD_VTXO_TREE_EXPIRY", args.Contains("--fast-expire") ? "16" : "1024")
+        .WithEnvironment("ARKD_UNILATERAL_EXIT_DELAY", args.Contains("--fast-expire") ? "16" : "512")
+        .WithEnvironment("ARKD_BOARDING_EXIT_DELAY", args.Contains("--fast-expire") ? "16" : "1024")
         .WithEnvironment("ARKD_DB_TYPE", "sqlite")
         .WithEnvironment("ARKD_EVENT_DB_TYPE", "badger")
         .WithEnvironment("ARKD_LIVE_STORE_TYPE", "inmemory")
