@@ -5,6 +5,7 @@ using NArk.Abstractions;
 using NArk.Abstractions.Contracts;
 using NArk.Abstractions.Fees;
 using NArk.Abstractions.Intents;
+using NArk.Abstractions.Safety;
 using NArk.Abstractions.VTXOs;
 using NArk.Helpers;
 using NArk.Models;
@@ -21,6 +22,7 @@ public class IntentGenerationService(
     IFeeEstimator feeEstimator,
     ISigningService signingService,
     IIntentStorage intentStorage,
+    ISafetyService safetyService,
     IContractStorage contractStorage,
     IVtxoStorage vtxoStorage,
     IIntentScheduler intentScheduler,
@@ -64,8 +66,15 @@ public class IntentGenerationService(
 
                     foreach (var vtxo in unspentVtxos)
                     {
-                        var signer = await signingService.GetVtxoPsbtSignerByContract(activeContractsByScript[vtxo.Script], vtxo, token);
-                        signers.Add(signer.Coin.ToLite(), signer);
+                        try
+                        {
+                            var signer = await signingService.GetVtxoPsbtSignerByContract(activeContractsByScript[vtxo.Script], vtxo, token);
+                            signers.Add(signer.Coin.ToLite(), signer);
+                        }
+                        catch (AdditionalInformationRequiredException ex)
+                        {
+                            logger?.LogDebug(0, ex, "Skipping vtxo {TxId}:{Index} - requires additional information (likely VHTLC contract)", vtxo.TransactionId, vtxo.TransactionOutputIndex);
+                        }
                     }
 
                     var intentSpecs =
@@ -73,7 +82,7 @@ public class IntentGenerationService(
 
                     foreach (var intentSpec in intentSpecs)
                     {
-                        await GenerateIntentFromSpec(activeContractsByWallet.Key, intentSpec, signers, token);
+                        await GenerateIntentFromSpec(activeContractsByWallet.Key, intentSpec, signers, false, token);
                     }
                 }
 
@@ -90,7 +99,7 @@ public class IntentGenerationService(
         }
     }
 
-    private async Task<Guid> GenerateIntentFromSpec(string walletId, ArkIntentSpec intentSpec, Dictionary<ArkCoinLite, ArkPsbtSigner> signers, CancellationToken token)
+    private async Task<Guid> GenerateIntentFromSpec(string walletId, ArkIntentSpec intentSpec, Dictionary<ArkCoinLite, ArkPsbtSigner> signers, bool force = false, CancellationToken token = default)
     {
         logger?.LogDebug("Generating intent from spec for wallet {WalletId} with {CoinCount} coins", walletId, intentSpec.Coins.Length);
         ArkServerInfo serverInfo = await clientTransport.GetServerInfoAsync(token);
@@ -109,11 +118,29 @@ public class IntentGenerationService(
             await intentStorage.GetIntentsByInputs(walletId, [.. intentSpec.Coins.Select(c => c.Outpoint)], true, token);
         if (overlappingIntents.Count != 0)
         {
-            logger?.LogDebug("Intent generation skipped for wallet {WalletId}: overlapping intents exist", walletId);
-            return Guid.Empty;
+            if (!force)
+            {
+                logger?.LogDebug("Intent generation skipped for wallet {WalletId}: overlapping intents exist", walletId);
+                return Guid.Empty;
+            }
+            else
+            {
+                logger?.LogWarning("Forcing intent generation for wallet {WalletId}: cancelling {OverlappingIntentCount} overlapping intents", walletId, overlappingIntents.Count);
+                foreach (var intent in overlappingIntents)
+                {
+                    await using var intentLock =
+                        await safetyService.LockKeyAsync($"intent::{intent.InternalId}", CancellationToken.None);
+                    var intentAfterLock =
+                        await intentStorage.GetIntentByInternalId(intent.InternalId, CancellationToken.None)
+                        ?? throw new Exception("Should not happen, intent disappeared from storage mid-action");
+                    await intentStorage.SaveIntent(intentAfterLock.WalletId,
+                        intentAfterLock with { State = ArkIntentState.Cancelled }, CancellationToken.None);
+                }
+            }
+
         }
 
-        var intentTxs = await CreateIntents(
+        var (RegisterTx, Delete, RegisterMessage, DeleteMessage) = await CreateIntents(
             serverInfo.Network,
             [await signers[intentSpec.Coins[0]].SigningEntity.GetPublicKey(token)],
             intentSpec.ValidFrom,
@@ -127,9 +154,9 @@ public class IntentGenerationService(
         await intentStorage.SaveIntent(walletId,
             new ArkIntent(internalId, null, walletId, ArkIntentState.WaitingToSubmit,
                 intentSpec.ValidFrom, intentSpec.ValidUntil, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow,
-                intentTxs.RegisterTx.ToBase64(), intentTxs.RegisterMessage, intentTxs.Delete.ToBase64(),
-                intentTxs.DeleteMessage, null, null, null,
-                intentSpec.Coins.Select(c => c.Outpoint).ToArray(),
+                RegisterTx.ToBase64(), RegisterMessage, Delete.ToBase64(),
+                DeleteMessage, null, null, null,
+                [.. intentSpec.Coins.Select(c => c.Outpoint)],
                 (await signers[intentSpec.Coins[0]].SigningEntity.GetOutputDescriptor(token)).ToString()), token);
 
         logger?.LogInformation("Generated intent {IntentId} for wallet {WalletId}", internalId, walletId);
@@ -148,7 +175,7 @@ public class IntentGenerationService(
                 2U,
                 0U,
                 0U,
-                inputs.Select(i => i.Coin).Cast<Coin>().ToArray()
+                [.. inputs.Select(i => i.Coin).Cast<Coin>()]
             );
 
         var toSignGTx = toSignTx.GetGlobalTransaction();
@@ -262,10 +289,10 @@ public class IntentGenerationService(
         logger?.LogInformation("Intent generation service disposed");
     }
 
-    public async Task<Guid> GenerateManualIntent(string walletId, ArkIntentSpec spec, Dictionary<ArkCoinLite, ArkPsbtSigner> signers, CancellationToken cancellationToken)
+    public async Task<Guid> GenerateManualIntent(string walletId, ArkIntentSpec spec, Dictionary<ArkCoinLite, ArkPsbtSigner> signers, bool force = false, CancellationToken cancellationToken = default)
     {
         logger?.LogDebug("Generating manual intent for wallet {WalletId}", walletId);
-        var internalId = await GenerateIntentFromSpec(walletId, spec, signers, cancellationToken);
+        var internalId = await GenerateIntentFromSpec(walletId, spec, signers, force, cancellationToken);
 
         if (internalId == Guid.Empty)
         {
@@ -280,5 +307,5 @@ public class IntentGenerationService(
 public interface IIntentGenerationService
 {
     Task<Guid> GenerateManualIntent(string walletId, ArkIntentSpec spec, Dictionary<ArkCoinLite, ArkPsbtSigner> signers,
-        CancellationToken cancellationToken);
+        bool force = false, CancellationToken cancellationToken = default);
 }

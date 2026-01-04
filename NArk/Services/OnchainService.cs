@@ -106,7 +106,7 @@ public class OnchainService(IClientTransport clientTransport, IContractService c
         );
         
         var intent =
-            await intentGenerationService.GenerateManualIntent(inputs[0].Coin.WalletIdentifier, intentSpec, inputSigners, cancellationToken);
+            await intentGenerationService.GenerateManualIntent(inputs[0].Coin.WalletIdentifier, intentSpec, inputSigners, true, cancellationToken);
 
         logger?.LogInformation("Collaborative exit initiated for wallet {WalletId} with intent {IntentId}", inputs[0].Coin.WalletIdentifier, intent);
         return intent;

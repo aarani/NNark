@@ -83,6 +83,7 @@ public class BatchSessionTests
             new DefaultFeeEstimator(walletDetails.clientTransport),
             signingService,
             intentStorage,
+            walletDetails.safetyService,
             walletDetails.contracts, walletDetails.vtxoStorage, scheduler,
             intentGenerationOptions);
         await intentGeneration.StartAsync(CancellationToken.None);

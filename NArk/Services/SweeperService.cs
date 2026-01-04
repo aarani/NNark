@@ -1,7 +1,10 @@
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using NArk.Abstractions;
 using NArk.Abstractions.Contracts;
+using NArk.Abstractions.Fees;
+using NArk.Abstractions.Intents;
 using NArk.Abstractions.VTXOs;
 using NArk.Abstractions.Wallets;
 using NArk.Contracts;
@@ -17,10 +20,13 @@ using NBitcoin;
 namespace NArk.Services;
 
 public class SweeperService(
+    IFeeEstimator feeEstimator,
     IWallet wallet,
     IClientTransport clientTransport,
     IEnumerable<ISweepPolicy> policies,
     IVtxoStorage vtxoStorage,
+    IIntentGenerationService intentGenerationService,
+    IContractService contractService,
     IContractStorage contractStorage,
     ISpendingService spendingService,
     IOptions<SweeperServiceOptions> options,
@@ -28,27 +34,33 @@ public class SweeperService(
     ILogger<SweeperService>? logger = null) : IAsyncDisposable
 {
     public SweeperService(
+        IFeeEstimator feeEstimator,
         IWallet wallet,
         IClientTransport clientTransport,
         IEnumerable<ISweepPolicy> policies,
         IVtxoStorage vtxoStorage,
+        IIntentGenerationService intentGenerationService,
+        IContractService contractService,
         IContractStorage contractStorage,
         ISpendingService spendingService,
         IOptions<SweeperServiceOptions> options)
-            : this(wallet, clientTransport, policies, vtxoStorage, contractStorage, spendingService, options, [], null)
+            : this(feeEstimator, wallet, clientTransport, policies, vtxoStorage, intentGenerationService, contractService, contractStorage, spendingService, options, [], null)
     {
     }
 
     public SweeperService(
+        IFeeEstimator feeEstimator,
         IWallet wallet,
         IClientTransport clientTransport,
         IEnumerable<ISweepPolicy> policies,
         IVtxoStorage vtxoStorage,
+        IIntentGenerationService intentGenerationService,
+        IContractService contractService,
         IContractStorage contractStorage,
         ISpendingService spendingService,
         IOptions<SweeperServiceOptions> options,
         ILogger<SweeperService> logger)
-            : this(wallet, clientTransport, policies, vtxoStorage, contractStorage, spendingService, options, [], logger)
+            : this(feeEstimator, wallet, clientTransport, policies, vtxoStorage, intentGenerationService, contractService, contractStorage, spendingService, options, [], logger)
     {
     }
 
@@ -98,7 +110,7 @@ public class SweeperService(
         if (contracts.Count is 0)
             contracts = await contractStorage.LoadActiveContracts(cancellationToken: cancellationToken);
         var matchingVtxos =
-            await vtxoStorage.GetVtxosByScripts(contracts.Select(c => c.Script).ToArray(), false, cancellationToken);
+            await vtxoStorage.GetVtxosByScripts([.. contracts.Select(c => c.Script)], false, cancellationToken);
         var coins = matchingVtxos.Join(contracts, v => v.Script, c => c.Script,
                 (vtxo, entity) => GetUnspendableCoin(vtxo, entity, _serverInfo!),
                 StringComparer.InvariantCultureIgnoreCase)
@@ -110,7 +122,7 @@ public class SweeperService(
     {
         var unspentVtxos = vtxos.Where(v => !v.IsSpent()).ToArray();
         var matchingContracts =
-            await contractStorage.LoadContractsByScripts(unspentVtxos.Select(x => x.Script).ToArray(),
+            await contractStorage.LoadContractsByScripts([.. unspentVtxos.Select(x => x.Script)],
                 cancellationToken);
         var coins =
             unspentVtxos
@@ -144,42 +156,97 @@ public class SweeperService(
 
     private async Task Sweep(Dictionary<OutPoint, PriorityQueue<ArkCoin, int>> outpointToCoins)
     {
+        var serverInfo = await clientTransport.GetServerInfoAsync();
+
         logger?.LogDebug("Starting sweep for {OutpointCount} outpoints", outpointToCoins.Count);
         foreach (var (outpoint, possiblePaths) in outpointToCoins)
         {
-            while (possiblePaths.Count > 0)
+            if (possiblePaths.Count == 0)
             {
-                var possiblePath = possiblePaths.Dequeue();
-                var signer = await wallet.FindSigningEntity(possiblePath.SignerDescriptor);
-                var psbtSigner = new ArkPsbtSigner(possiblePath, signer);
-                try
+                logger?.LogWarning("No sweep paths available for outpoint {Outpoint}", outpoint);
+                continue;
+            }
+            
+            var firstPath = possiblePaths.Peek();
+            var firstPathLite = firstPath.ToLite();
+            
+            if (firstPath.Amount < serverInfo.Dust)
+            {
+                logger?.LogInformation("Skipping sweep for outpoint {Outpoint}: amount {Amount} is below dust threshold", outpoint, firstPath.Amount);
+                await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(firstPath, null,
+                    ActionState.Failed, "Amount is below dust threshold."));
+                continue;
+            }
+
+            if (firstPath.Recoverable)
+            {
+                var signer = await wallet.FindSigningEntity(firstPath.SignerDescriptor);
+                var output = await contractService.DerivePaymentContract(firstPath.WalletIdentifier);
+                var feeEstimation = await feeEstimator.EstimateFeeAsync(
+                    [firstPathLite],
+                    [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(firstPath.Amount), output.GetArkAddress())]
+                );
+
+                await intentGenerationService.GenerateManualIntent(
+                    firstPath.WalletIdentifier,
+                    new ArkIntentSpec(
+                        [firstPathLite],
+                        [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(firstPath.Amount - feeEstimation), output.GetArkAddress())],
+                        DateTimeOffset.UtcNow,
+                        DateTimeOffset.UtcNow.AddHours(1)
+                    ),
+                    new Dictionary<ArkCoinLite, ArkPsbtSigner>
+                    {
+                        { firstPathLite, new ArkPsbtSigner(firstPath, signer)}
+                    },
+                    true
+                );
+
+                logger?.LogInformation("Skipping sweep for outpoint {Outpoint}: Vtxo is recoverable, generating intent...", outpoint);
+                await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(firstPath, null,
+                    ActionState.Successful, "Vtxo is recoverable, skipping sweep, generating intent..."));
+            }
+            else
+            {
+                await TrySweepOutpoint(outpoint, possiblePaths);
+            }
+        }
+    }
+
+    private async Task TrySweepOutpoint(OutPoint outpoint, PriorityQueue<ArkCoin, int> possiblePaths)
+    {
+        while (possiblePaths.TryDequeue(out var possiblePath, out _))
+        {
+            var signer = await wallet.FindSigningEntity(possiblePath.SignerDescriptor);
+            var psbtSigner = new ArkPsbtSigner(possiblePath, signer);
+            
+            try
+            {
+                var txId = await spendingService.Spend(possiblePath.WalletIdentifier, [psbtSigner], [],
+                    CancellationToken.None);
+                logger?.LogInformation("Sweep successful for outpoint {Outpoint}, txId: {TxId}", outpoint, txId);
+                await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(psbtSigner.Coin, txId,
+                    ActionState.Successful, null));
+                return;
+            }
+            catch (AlreadyLockedVtxoException ex)
+            {
+                logger?.LogWarning(0, ex, "Sweep skipped for outpoint {Outpoint}: vtxo is already locked", outpoint);
+                await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(psbtSigner.Coin, null,
+                    ActionState.Failed, "Vtxo is already locked by another process."));
+                return;
+            }
+            catch (Exception ex)
+            {
+                if (possiblePaths.Count == 0)
                 {
-                    var txId = await spendingService.Spend(possiblePath.WalletIdentifier, [psbtSigner], [],
-                        CancellationToken.None);
-                    logger?.LogInformation("Sweep successful for outpoint {Outpoint}, txId: {TxId}", outpoint, txId);
-                    await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(psbtSigner.Coin, txId,
-                        ActionState.Successful, null));
-                    break;
-                }
-                catch (AlreadyLockedVtxoException ex)
-                {
-                    logger?.LogWarning(0, ex, "Sweep skipped for outpoint {Outpoint}: vtxo is already locked", outpoint);
+                    logger?.LogError(0, ex, "All sweep paths failed for outpoint {Outpoint}", outpoint);
                     await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(psbtSigner.Coin, null,
-                        ActionState.Failed, "Vtxo is already locked by another process."));
-                    break;
+                        ActionState.Failed, $"All sweeping paths failed, ex: {ex}"));
                 }
-                catch (Exception ex)
+                else
                 {
-                    if (possiblePaths.Count == 0)
-                    {
-                        logger?.LogError(0, ex, "All sweep paths failed for outpoint {Outpoint}", outpoint);
-                        await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(psbtSigner.Coin, null,
-                            ActionState.Failed, $"All sweeping paths failed, ex: {ex}"));
-                    }
-                    else
-                    {
-                        logger?.LogDebug(0, ex, "Sweep path failed for outpoint {Outpoint}, trying next path ({RemainingPaths} remaining)", outpoint, possiblePaths.Count);
-                    }
+                    logger?.LogDebug(0, ex, "Sweep path failed for outpoint {Outpoint}, trying next path ({RemainingPaths} remaining)", outpoint, possiblePaths.Count);
                 }
             }
         }
