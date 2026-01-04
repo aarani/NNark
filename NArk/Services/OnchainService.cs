@@ -1,12 +1,72 @@
 using NArk.Abstractions;
+using NArk.Abstractions.Fees;
 using NArk.Abstractions.Intents;
+using NArk.Helpers;
 using NArk.Transactions;
+using NArk.Transport;
 using NBitcoin;
 
 namespace NArk.Services;
 
-public class OnchainService(ISigningService signingService, IIntentGenerationService intentGenerationService) : IOnchainService
+public class OnchainService(IClientTransport clientTransport, IContractService contractService, ISpendingService spendingService, ISigningService signingService, IIntentGenerationService intentGenerationService, IFeeEstimator feeEstimator) : IOnchainService
 {
+    public async Task<Guid> InitiateCollaborativeExit(string walletId, ArkTxOut output,
+        CancellationToken cancellationToken = default)
+    {
+        var serverInfo = await clientTransport.GetServerInfoAsync(cancellationToken);
+        
+        if (output.Value < serverInfo.Dust)
+            throw new InvalidOperationException("Output value is below dust threshold.");
+        
+        var availableCoins =
+            await spendingService.GetAvailableCoins(walletId, cancellationToken);
+        
+        var changeAddress = (await contractService.DerivePaymentContract(walletId, cancellationToken)).GetArkAddress();
+
+        var outputValueUsedForCoinSelection = output.Value; 
+        
+        while (true)
+        {
+            var selectedCoins = CoinSelectionHelper.SelectCoins([..availableCoins], outputValueUsedForCoinSelection, serverInfo.Dust, 0);
+
+            var totalInput = selectedCoins.Sum(x => x.Coin.TxOut.Value);
+            var change = totalInput - output.Value;
+
+            var estimatedFeeIfChange = await feeEstimator.EstimateFeeAsync(
+                selectedCoins.Select(c => c.Coin.ToLite()).ToArray(),
+                [
+                    output,
+                    new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!)
+                ],
+                cancellationToken);
+
+            if (change >= estimatedFeeIfChange + serverInfo.Dust)
+            {
+                ArkTxOut[] outputs = [
+                    output,
+                    new(ArkTxOutType.Vtxo, Money.Satoshis(change - estimatedFeeIfChange), changeAddress!)
+                ];
+                return await InitiateCollaborativeExit(selectedCoins.ToArray(), outputs, cancellationToken);
+            }
+            else
+            {
+                var estimatedFeeIfNoChange = await feeEstimator.EstimateFeeAsync(
+                    selectedCoins.Select(c => c.Coin.ToLite()).ToArray(),
+                    [output],
+                    cancellationToken);
+
+                if (totalInput >= output.Value + Math.Max(serverInfo.Dust, estimatedFeeIfNoChange))
+                {
+                    ArkTxOut[] outputs = [output];
+                    return await InitiateCollaborativeExit(selectedCoins.ToArray(), outputs, cancellationToken);
+                }
+
+                // Increase output value to force selection of more coins
+                outputValueUsedForCoinSelection += serverInfo.Dust;
+            }
+        }
+    }
+    
     public async Task<Guid> InitiateCollaborativeExit(ArkCoin[] inputs, ArkTxOut[] outputs,
         CancellationToken cancellationToken = default)
     {

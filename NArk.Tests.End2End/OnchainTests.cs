@@ -99,31 +99,14 @@ public class OnchainTests
                     .ToBytes()), Network.RegTest);
 
         var onchainService = arkHost.Services.GetRequiredService<IOnchainService>();
-        var spendingService = arkHost.Services.GetRequiredService<ISpendingService>();
-        var availableCoins = await spendingService.GetAvailableCoins("wallet1", CancellationToken.None);
-        var inputsSumAfterBeforeFees = availableCoins.Sum(c => c.Coin.Amount);
-        var feeEstimator = arkHost.Services.GetRequiredService<IFeeEstimator>();
-        var fees =
-            await feeEstimator.EstimateFeeAsync(
-                availableCoins.Select(a => a.Coin.ToLite()).ToArray(),
-                [
-                    new ArkTxOut(
-                        ArkTxOutType.Onchain,
-                        inputsSumAfterBeforeFees,
-                        destination
-                    )
-                ],
-                CancellationToken.None);
-
         await onchainService.InitiateCollaborativeExit(
-            availableCoins.ToArray(),
-            [
-                new ArkTxOut(
-                    ArkTxOutType.Onchain,
-                    inputsSumAfterBeforeFees - fees,
-                    destination
-                )
-            ]
+            "wallet1",
+            new ArkTxOut(
+                ArkTxOutType.Onchain,
+                10000UL,
+                destination
+            ),
+            CancellationToken.None
         );
 
         var gotBatchTcs = new TaskCompletionSource();
