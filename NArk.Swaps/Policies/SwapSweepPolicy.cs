@@ -16,24 +16,24 @@ public class SwapSweepPolicy(IWallet wallet, ISwapStorage swapStorage) : ISweepP
     {
         var activeSwaps = await swapStorage.GetActiveSwaps();
         coins = coins.Where(c => c.Contract is VHTLCContract);
-        var coinSwapPairs = coins.Join(activeSwaps, c => c.Contract.ToString(), s => s.ContractScript, ((Coin, Swap) => (Coin, Swap)));
-        foreach (var (Coin, _) in coinSwapPairs)
+        var coinSwapPairs = coins.Join(activeSwaps, c => c.Contract.ToString(), s => s.ContractScript, (coin, swap) => (coin, swap));
+        foreach (var (coin, _) in coinSwapPairs)
         {
-            if (Coin.Contract is not VHTLCContract htlc) continue;
+            if (coin.Contract is not VHTLCContract htlc) continue;
 
-            var fingerprint = await wallet.GetWalletFingerprint(Coin.WalletIdentifier);
+            var fingerprint = await wallet.GetWalletFingerprint(coin.WalletIdentifier);
 
             if (htlc.Preimage is not null && OutputDescriptorHelpers.GetFingerprint(htlc.Receiver).Equals(fingerprint, StringComparison.InvariantCultureIgnoreCase))
             {
-                yield return new ArkCoin(Coin.WalletIdentifier, htlc, Coin.Birth, Coin.ExpiresAt, Coin.ExpiresAtHeight, Coin.Outpoint, Coin.TxOut, htlc.Receiver,
-                    htlc.CreateClaimScript(), new WitScript(Op.GetPushOp(htlc.Preimage!)), null, null, Coin.Recoverable);
+                yield return new ArkCoin(coin.WalletIdentifier, htlc, coin.Birth, coin.ExpiresAt, coin.ExpiresAtHeight, coin.Outpoint, coin.TxOut, htlc.Receiver,
+                    htlc.CreateClaimScript(), new WitScript(Op.GetPushOp(htlc.Preimage!)), null, null, coin.Recoverable);
             }
 
             if (htlc.RefundLocktime.IsTimeLock &&
                 htlc.RefundLocktime.Date < DateTime.UtcNow && OutputDescriptorHelpers.GetFingerprint(htlc.Sender).Equals(fingerprint, StringComparison.InvariantCultureIgnoreCase))
             {
-                yield return new ArkCoin(Coin.WalletIdentifier, htlc, Coin.Birth, Coin.ExpiresAt, Coin.ExpiresAtHeight, Coin.Outpoint, Coin.TxOut, htlc.Receiver,
-                    htlc.CreateRefundWithoutReceiverScript(), null, htlc.RefundLocktime, null, Coin.Recoverable);
+                yield return new ArkCoin(coin.WalletIdentifier, htlc, coin.Birth, coin.ExpiresAt, coin.ExpiresAtHeight, coin.Outpoint, coin.TxOut, htlc.Receiver,
+                    htlc.CreateRefundWithoutReceiverScript(), null, htlc.RefundLocktime, null, coin.Recoverable);
             }
         }
     }
