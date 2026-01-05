@@ -1,19 +1,14 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using NArk.Abstractions.Blockchain;
 using NArk.Abstractions.Contracts;
-using NArk.Abstractions.Fees;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
 using NArk.Abstractions.VTXOs;
 using NArk.Abstractions.Wallets;
-using NArk.CoinSelector;
 using NArk.Events;
-using NArk.Fees;
 using NArk.Models.Options;
-using NArk.Services;
 using NArk.Swaps.Abstractions;
 using NArk.Swaps.Boltz.Client;
 using NArk.Swaps.Boltz.Models;
@@ -41,20 +36,7 @@ public static class AppExtensions
             hostBuilder.ConfigureServices(services =>
             {
                 services.AddLogging();
-                services.AddSingleton<ISpendingService, SpendingService>();
-                services.AddSingleton<ISigningService, SigningService>();
-                services.AddSingleton<IContractService, ContractService>();
-                services.AddSingleton<VtxoSynchronizationService>();
-                services.AddSingleton<IntentGenerationService>();
-                services.AddSingleton<IIntentGenerationService, IntentGenerationService>(
-                    s => s.GetRequiredService<IntentGenerationService>());
-                services.AddSingleton<IntentSynchronizationService>();
-                services.AddSingleton<BatchManagementService>();
-                services.AddSingleton<IOnchainService, OnchainService>();
-                services.AddSingleton<SweeperService>();
-                services.AddSingleton<IFeeEstimator, DefaultFeeEstimator>();
-                services.AddHostedService<ArkHostedLifecycle>();
-                services.AddSingleton<ICoinSelector, DefaultCoinSelector>();
+                services.AddArkCoreServices();
             });
             _hostBuilder = hostBuilder;
         }
