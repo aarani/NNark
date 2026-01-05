@@ -156,7 +156,7 @@ public class SweeperService(
 
     private async Task Sweep(Dictionary<OutPoint, PriorityQueue<ArkCoin, int>> outpointToCoins)
     {
-        var serverInfo = await clientTransport.GetServerInfoAsync();
+        var recoverablesByWallet = new Dictionary<string, HashSet<ArkCoin>>();
 
         logger?.LogDebug("Starting sweep for {OutpointCount} outpoints", outpointToCoins.Count);
         foreach (var (outpoint, possiblePaths) in outpointToCoins)
@@ -166,51 +166,67 @@ public class SweeperService(
                 logger?.LogWarning("No sweep paths available for outpoint {Outpoint}", outpoint);
                 continue;
             }
-            
+
             var firstPath = possiblePaths.Peek();
-            var firstPathLite = firstPath.ToLite();
-            
-            if (firstPath.Amount < serverInfo.Dust)
-            {
-                logger?.LogInformation("Skipping sweep for outpoint {Outpoint}: amount {Amount} is below dust threshold", outpoint, firstPath.Amount);
-                await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(firstPath, null,
-                    ActionState.Failed, "Amount is below dust threshold."));
-                continue;
-            }
 
             if (firstPath.Recoverable)
             {
-                var signer = await wallet.FindSigningEntity(firstPath.SignerDescriptor);
-                var output = await contractService.DerivePaymentContract(firstPath.WalletIdentifier);
-                var feeEstimation = await feeEstimator.EstimateFeeAsync(
-                    [firstPathLite],
-                    [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(firstPath.Amount), output.GetArkAddress())]
-                );
-
-                await intentGenerationService.GenerateManualIntent(
-                    firstPath.WalletIdentifier,
-                    new ArkIntentSpec(
-                        [firstPathLite],
-                        [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(firstPath.Amount - feeEstimation), output.GetArkAddress())],
-                        DateTimeOffset.UtcNow,
-                        DateTimeOffset.UtcNow.AddHours(1)
-                    ),
-                    new Dictionary<ArkCoinLite, ArkPsbtSigner>
-                    {
-                        { firstPathLite, new ArkPsbtSigner(firstPath, signer)}
-                    },
-                    true
-                );
-
-                logger?.LogInformation("Skipping sweep for outpoint {Outpoint}: Vtxo is recoverable, generating intent...", outpoint);
-                await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(firstPath, null,
-                    ActionState.Successful, "Vtxo is recoverable, skipping sweep, generating intent..."));
+                if (recoverablesByWallet.TryGetValue(firstPath.WalletIdentifier, out var recoverables))
+                    recoverables.Add(firstPath);
+                else
+                    recoverablesByWallet[firstPath.WalletIdentifier] = [firstPath];
             }
             else
             {
                 await TrySweepOutpoint(outpoint, possiblePaths);
             }
         }
+
+        foreach (var (walletId, coins) in recoverablesByWallet)
+        {
+            if (options.Value.BatchRecoverableVtxosInSingleIntent)
+            {
+                await CreateIntent(walletId, coins);
+            }
+            else
+            {
+                foreach (var coin in coins)
+                {
+                    await CreateIntent(walletId, [coin]);
+                }
+            }
+        }
+
+    }
+
+    private async Task CreateIntent(string walletIdentifier, IReadOnlyCollection<ArkCoin> coins)
+    {
+        var totalAmount = coins.Sum(c => c.Amount);
+
+        Dictionary<ArkCoinLite, ArkPsbtSigner> coinToSigners = [];
+        foreach (var coin in coins)
+        {
+            coinToSigners[coin.ToLite()] =
+                new ArkPsbtSigner(coin, await wallet.FindSigningEntity(coin.SignerDescriptor));
+        }
+
+        var output = await contractService.DerivePaymentContract(walletIdentifier);
+        var feeEstimation = await feeEstimator.EstimateFeeAsync(
+            coinToSigners.Keys.ToArray(),
+            [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(totalAmount), output.GetArkAddress())]
+        );
+
+        await intentGenerationService.GenerateManualIntent(
+            walletIdentifier,
+            new ArkIntentSpec(
+                coinToSigners.Keys.ToArray(),
+                [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(totalAmount - feeEstimation), output.GetArkAddress())],
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow.AddHours(1)
+            ),
+            coinToSigners,
+            true
+        );
     }
 
     private async Task TrySweepOutpoint(OutPoint outpoint, PriorityQueue<ArkCoin, int> possiblePaths)
@@ -219,7 +235,7 @@ public class SweeperService(
         {
             var signer = await wallet.FindSigningEntity(possiblePath.SignerDescriptor);
             var psbtSigner = new ArkPsbtSigner(possiblePath, signer);
-            
+
             try
             {
                 var txId = await spendingService.Spend(possiblePath.WalletIdentifier, [psbtSigner], [],

@@ -448,7 +448,7 @@ public class BatchManagementService(
                 CancellationReason = $"Batch failed: {batchEvent.Reason}",
                 UpdatedAt = DateTimeOffset.UtcNow
             }, cancellationToken);
-        
+
         await eventHandlers.SafeHandleEventAsync(
             new PostBatchSessionEvent(intent, null, ActionState.Failed, batchEvent.Reason),
             cancellationToken);

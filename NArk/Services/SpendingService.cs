@@ -11,6 +11,7 @@ using NArk.Helpers;
 using NArk.Transactions;
 using NArk.Transport;
 using NBitcoin;
+using ICoinSelector = NArk.CoinSelector.ICoinSelector;
 
 namespace NArk.Services;
 
@@ -20,6 +21,7 @@ public class SpendingService(
     ISigningService signingService,
     IContractService paymentService,
     IClientTransport transport,
+    ICoinSelector coinSelector,
     ISafetyService safetyService,
     IIntentStorage intentStorage,
     IEnumerable<IEventHandler<PostCoinsSpendActionEvent>> postSpendEventHandlers,
@@ -31,9 +33,10 @@ public class SpendingService(
         ISigningService signingService,
         IContractService paymentService,
         IClientTransport transport,
+        ICoinSelector coinSelector,
         ISafetyService safetyService,
         IIntentStorage intentStorage)
-        : this(vtxoStorage, contractStorage, signingService, paymentService, transport, safetyService, intentStorage, [], null)
+        : this(vtxoStorage, contractStorage, signingService, paymentService, transport, coinSelector, safetyService, intentStorage, [], null)
     {
     }
 
@@ -42,13 +45,14 @@ public class SpendingService(
         ISigningService signingService,
         IContractService paymentService,
         IClientTransport transport,
+        ICoinSelector coinSelector,
         ISafetyService safetyService,
         IIntentStorage intentStorage,
         ILogger<SpendingService> logger)
-        : this(vtxoStorage, contractStorage, signingService, paymentService, transport, safetyService, intentStorage, [], logger)
+        : this(vtxoStorage, contractStorage, signingService, paymentService, transport, coinSelector, safetyService, intentStorage, [], logger)
     {
     }
-    
+
     public async Task<uint256> Spend(string walletId, ArkPsbtSigner[] inputs, ArkTxOut[] outputs, CancellationToken cancellationToken = default)
     {
         logger?.LogDebug("Spending {InputCount} inputs with {OutputCount} outputs for wallet {WalletId}", inputs.Length, outputs.Length, walletId);
@@ -185,7 +189,7 @@ public class SpendingService(
             }
         }
 
-        var selectedCoins = CoinSelectionHelper.SelectCoins([.. coins], outputsSumInSatoshis, serverInfo.Dust,
+        var selectedCoins = coinSelector.SelectCoins([.. coins], outputsSumInSatoshis, serverInfo.Dust,
             hasExplicitSubdustOutput);
         logger?.LogDebug("Selected {SelectedCount} coins for spending", selectedCoins.Count);
 

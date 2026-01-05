@@ -10,6 +10,7 @@ using NArk.Tests.End2End.TestPersistance;
 using NArk.Transport.GrpcClient;
 using NArk.Wallets;
 using NBitcoin;
+using DefaultCoinSelector = NArk.CoinSelector.DefaultCoinSelector;
 
 namespace NArk.Tests.End2End;
 
@@ -45,7 +46,7 @@ public class VtxoSynchronizationTests
         // Receive arkd information
         var clientTransport = new GrpcClientTransport(_app.GetEndpoint("ark", "arkd").ToString());
         var info = await clientTransport.GetServerInfoAsync();
-        
+
         // Pay a random amount to the contract address
         var randomAmount = RandomNumberGenerator.GetInt32((int)info.Dust.Satoshi, 100000);
 
@@ -130,12 +131,12 @@ public class VtxoSynchronizationTests
 
         var contract = await contractService.DerivePaymentContract("wallet1");
         var wallet1Address = contract.GetArkAddress();
-        
+
         // Pay a random amount to the contract address
         var randomAmount = 50000;
         var receiveTcs = new TaskCompletionSource();
         var receiveHalfTcs = new TaskCompletionSource();
-        
+
         vtxoStorage.VtxosChanged += (_, vtxo) =>
         {
             if (!vtxo.IsSpent() && (ulong)randomAmount == vtxo.Amount)
@@ -147,7 +148,7 @@ public class VtxoSynchronizationTests
                 receiveHalfTcs.TrySetResult();
             }
         };
-        
+
         await Cli.Wrap("docker")
             .WithArguments([
                 "exec", "-t", "ark", "ark", "send", "--to", wallet1Address.ToString(false),
@@ -163,7 +164,7 @@ public class VtxoSynchronizationTests
         var wallet2Address = contract2.GetArkAddress();
 
         var spendingService = new SpendingService(vtxoStorage, contracts,
-            new SigningService(wallet, contracts, clientTransport), contractService, clientTransport, safetyService, new InMemoryIntentStorage());
+            new SigningService(wallet, contracts, clientTransport), contractService, clientTransport, new DefaultCoinSelector(), safetyService, new InMemoryIntentStorage());
 
         await spendingService.Spend("wallet1",
         [

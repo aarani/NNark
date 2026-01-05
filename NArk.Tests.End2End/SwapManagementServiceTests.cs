@@ -16,6 +16,7 @@ using NArk.Swaps.Services;
 using NArk.Tests.End2End.Common;
 using NArk.Tests.End2End.TestPersistance;
 using NBitcoin;
+using DefaultCoinSelector = NArk.CoinSelector.DefaultCoinSelector;
 
 namespace NArk.Tests.End2End;
 
@@ -62,7 +63,7 @@ public class SwapManagementServiceTests
             new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
                 new SigningService(testingPrerequisite.wallet, testingPrerequisite.contracts,
                     testingPrerequisite.clientTransport),
-                testingPrerequisite.contractService, testingPrerequisite.clientTransport, testingPrerequisite.safetyService, intentStorage),
+                testingPrerequisite.contractService, testingPrerequisite.clientTransport, new DefaultCoinSelector(), testingPrerequisite.safetyService, intentStorage),
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
             testingPrerequisite.wallet,
             swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, intentStorage, boltzClient);
@@ -121,7 +122,7 @@ public class SwapManagementServiceTests
 
         var spendingService = new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
             signingService,
-            testingPrerequisite.contractService, testingPrerequisite.clientTransport, testingPrerequisite.safetyService, intentStorage);
+            testingPrerequisite.contractService, testingPrerequisite.clientTransport, new DefaultCoinSelector(), testingPrerequisite.safetyService, intentStorage);
         await using var sweepMgr = new SweeperService(new DefaultFeeEstimator(testingPrerequisite.clientTransport), testingPrerequisite.wallet, testingPrerequisite.clientTransport,
             [new SwapSweepPolicy(testingPrerequisite.wallet, swapStorage)], testingPrerequisite.vtxoStorage,
             intentGeneration, testingPrerequisite.contractService, testingPrerequisite.contracts, spendingService, new OptionsWrapper<SweeperServiceOptions>(new SweeperServiceOptions() { ForceRefreshInterval = TimeSpan.Zero }));
@@ -170,7 +171,7 @@ public class SwapManagementServiceTests
             new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
                 new SigningService(testingPrerequisite.wallet, testingPrerequisite.contracts,
                     testingPrerequisite.clientTransport),
-                testingPrerequisite.contractService, testingPrerequisite.clientTransport, testingPrerequisite.safetyService, intentStorage),
+                testingPrerequisite.contractService, testingPrerequisite.clientTransport, new DefaultCoinSelector(), testingPrerequisite.safetyService, intentStorage),
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
             testingPrerequisite.wallet,
             swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, intentStorage, boltzClient);

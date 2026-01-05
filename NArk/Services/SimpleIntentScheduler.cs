@@ -61,7 +61,7 @@ public class SimpleIntentScheduler(IFeeEstimator feeEstimator, IClientTransport 
             var fees = await feeEstimator.EstimateFeeAsync(specBeforeFees, cancellationToken);
 
             var inputsSumAfterAfterFees = inputsSumAfterBeforeFees - fees;
-            
+
             if (inputsSumAfterAfterFees < Money.Zero)
             {
                 logger?.LogDebug("Skipping wallet {WalletId}: inputs sum after fees is negative", g.Key);
@@ -86,7 +86,7 @@ public class SimpleIntentScheduler(IFeeEstimator feeEstimator, IClientTransport 
                     DateTimeOffset.UtcNow,
                     DateTimeOffset.UtcNow.AddHours(1)
                 );
-            
+
             intentSpecs.Add(finalSpec);
             logger?.LogDebug("Created intent spec for wallet {WalletId} with {CoinCount} coins", g.Key, g.Count());
         }

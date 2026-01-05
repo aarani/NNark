@@ -1,11 +1,12 @@
 // Should be refactored, this is a copy from old Nark
 
+using NArk.Helpers;
 using NArk.Transactions;
 using NBitcoin;
 
-namespace NArk.Helpers;
+namespace NArk.CoinSelector;
 
-internal static class CoinSelectionHelper
+public class DefaultCoinSelector : ICoinSelector
 {
     /// <summary>
     /// Selects coins to minimize sub-dust change. Prefers exact matches or combinations that avoid subdust change.
@@ -15,7 +16,7 @@ internal static class CoinSelectionHelper
     /// <param name="dustThreshold">Dust threshold from operator terms</param>
     /// <param name="currentSubDustOutputs">Whether the user explicitly uses subdust change</param>
     /// <returns>Selected coins or null if impossible</returns>
-    internal static IReadOnlyCollection<ArkPsbtSigner> SelectCoins(
+    public IReadOnlyCollection<ArkPsbtSigner> SelectCoins(
         List<ArkPsbtSigner> availableCoins,
         Money targetAmount,
         Money dustThreshold,
@@ -83,7 +84,7 @@ internal static class CoinSelectionHelper
     /// <summary>
     /// Attempts to find a better coin combination that avoids subdust change
     /// </summary>
-    private static List<ArkPsbtSigner>? TryFindBetterCombination(
+    private List<ArkPsbtSigner>? TryFindBetterCombination(
         List<ArkPsbtSigner> availableCoins,
         Money targetAmount,
         Money dustThreshold)

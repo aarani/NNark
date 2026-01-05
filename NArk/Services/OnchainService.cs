@@ -2,14 +2,14 @@ using Microsoft.Extensions.Logging;
 using NArk.Abstractions;
 using NArk.Abstractions.Fees;
 using NArk.Abstractions.Intents;
-using NArk.Helpers;
 using NArk.Transactions;
 using NArk.Transport;
 using NBitcoin;
+using ICoinSelector = NArk.CoinSelector.ICoinSelector;
 
 namespace NArk.Services;
 
-public class OnchainService(IClientTransport clientTransport, IContractService contractService, ISpendingService spendingService, ISigningService signingService, IIntentGenerationService intentGenerationService, IFeeEstimator feeEstimator, ILogger<OnchainService>? logger = null) : IOnchainService
+public class OnchainService(IClientTransport clientTransport, IContractService contractService, ISpendingService spendingService, ISigningService signingService, IIntentGenerationService intentGenerationService, IFeeEstimator feeEstimator, ICoinSelector coinSelector, ILogger<OnchainService>? logger = null) : IOnchainService
 {
     public async Task<Guid> InitiateCollaborativeExit(string walletId, ArkTxOut output,
         CancellationToken cancellationToken = default)
@@ -22,17 +22,17 @@ public class OnchainService(IClientTransport clientTransport, IContractService c
             logger?.LogWarning("Collaborative exit rejected for wallet {WalletId}: output value {Value} is below dust threshold {Dust}", walletId, output.Value, serverInfo.Dust);
             throw new InvalidOperationException("Output value is below dust threshold.");
         }
-        
+
         var availableCoins =
             await spendingService.GetAvailableCoins(walletId, cancellationToken);
-        
+
         var changeAddress = (await contractService.DerivePaymentContract(walletId, cancellationToken)).GetArkAddress();
 
-        var outputValueUsedForCoinSelection = output.Value; 
-        
+        var outputValueUsedForCoinSelection = output.Value;
+
         while (true)
         {
-            var selectedCoins = CoinSelectionHelper.SelectCoins([..availableCoins], outputValueUsedForCoinSelection, serverInfo.Dust, 0);
+            var selectedCoins = coinSelector.SelectCoins([.. availableCoins], outputValueUsedForCoinSelection, serverInfo.Dust, 0);
 
             var totalInput = selectedCoins.Sum(x => x.Coin.TxOut.Value);
             var change = totalInput - output.Value;
@@ -71,7 +71,7 @@ public class OnchainService(IClientTransport clientTransport, IContractService c
             }
         }
     }
-    
+
     public async Task<Guid> InitiateCollaborativeExit(ArkCoin[] inputs, ArkTxOut[] outputs,
         CancellationToken cancellationToken = default)
     {
@@ -94,17 +94,17 @@ public class OnchainService(IClientTransport clientTransport, IContractService c
             logger?.LogWarning("Collaborative exit rejected: inputs belong to multiple wallets");
             throw new InvalidOperationException("All inputs must belong to the same wallet for collaborative exit.");
         }
-        
+
         var inputSigners =
             inputs.ToDictionary(signer => signer.Coin.ToLite(), signer => signer);
-        
+
         var intentSpec = new ArkIntentSpec(
             [.. inputSigners.Keys],
             outputs,
             DateTime.UtcNow,
             DateTime.UtcNow.AddHours(1)
         );
-        
+
         var intent =
             await intentGenerationService.GenerateManualIntent(inputs[0].Coin.WalletIdentifier, intentSpec, inputSigners, true, cancellationToken);
 

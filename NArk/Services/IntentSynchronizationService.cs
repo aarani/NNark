@@ -31,7 +31,7 @@ public class IntentSynchronizationService(
     {
 
     }
-    
+
     private readonly CancellationTokenSource _shutdownCts = new();
 
     private readonly Channel<string> _submitTriggerChannel = Channel.CreateUnbounded<string>();
@@ -173,5 +173,5 @@ public class IntentSynchronizationService(
         logger?.LogInformation("Intent synchronization service disposed");
     }
 
-    
+
 }

@@ -130,18 +130,24 @@ public class SwapsManagementService : IAsyncDisposable
             {
                 var swapId = eventDetails[3..];
 
-                await PollSwapState([swapId], cancellationToken);
-
                 // If we already monitor this swap, no need to restart websocket
-                if (_swapsIdToWatch.Contains(swapId)) continue;
+                if (_swapsIdToWatch.Contains(swapId))
+                {
+                    await PollSwapState([swapId], cancellationToken);
+                }
+                else
+                {
+                    await PollSwapState([swapId], cancellationToken);
 
-                HashSet<string> newSwapIdSet = [.. _swapsIdToWatch, swapId];
-                _swapsIdToWatch = newSwapIdSet;
+                    HashSet<string> newSwapIdSet = [.. _swapsIdToWatch, swapId];
+                    _swapsIdToWatch = newSwapIdSet;
 
-                var newRestartCts = CancellationTokenSource.CreateLinkedTokenSource(_shutdownCts.Token);
-                _lastStreamTask = DoStatusCheck(newSwapIdSet, newRestartCts.Token);
-                await _restartCts.CancelAsync();
-                _restartCts = newRestartCts;
+                    var newRestartCts = CancellationTokenSource.CreateLinkedTokenSource(_shutdownCts.Token);
+                    _lastStreamTask = DoStatusCheck(newSwapIdSet, newRestartCts.Token);
+                    await _restartCts.CancelAsync();
+                    _restartCts = newRestartCts;
+
+                }
             }
             else
             {

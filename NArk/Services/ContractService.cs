@@ -27,7 +27,7 @@ public class ContractService(
         ILogger<ContractService> logger) : this(wallet, contractStorage, transport, [], logger)
     {
     }
-    
+
     public async Task<ArkContract> DerivePaymentContract(string walletId, CancellationToken cancellationToken = default)
     {
         logger?.LogDebug("Deriving payment contract for wallet {WalletId}", walletId);

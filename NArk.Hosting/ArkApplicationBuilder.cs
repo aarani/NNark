@@ -9,6 +9,7 @@ using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
 using NArk.Abstractions.VTXOs;
 using NArk.Abstractions.Wallets;
+using NArk.CoinSelector;
 using NArk.Events;
 using NArk.Fees;
 using NArk.Models.Options;
@@ -53,6 +54,7 @@ public static class AppExtensions
                 services.AddSingleton<SweeperService>();
                 services.AddSingleton<IFeeEstimator, DefaultFeeEstimator>();
                 services.AddHostedService<ArkHostedLifecycle>();
+                services.AddSingleton<ICoinSelector, DefaultCoinSelector>();
             });
             _hostBuilder = hostBuilder;
         }
@@ -118,7 +120,7 @@ public static class AppExtensions
             _hostBuilder.ConfigureServices(services => { services.AddSingleton<IChainTimeProvider, TTime>(); });
             return this;
         }
-        
+
         public ArkApplicationBuilder WithEventHandler<TEvent, THandler>()
             where TEvent : class
             where THandler : class, IEventHandler<TEvent>
@@ -129,7 +131,7 @@ public static class AppExtensions
             });
             return this;
         }
-        
+
         public ArkApplicationBuilder OnMainnet()
         {
             _hostBuilder.ConfigureServices(services =>
