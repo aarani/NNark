@@ -97,13 +97,11 @@ public class VtxoSynchronizationService : IAsyncDisposable
         await _viewSyncLock.WaitAsync(token);
         try
         {
-            var wallets = await _walletStorage.LoadAllWallets(token);
-            HashSet<string> newViewOfScripts = [];
-            foreach (var wallet in wallets)
-            {
-                var contracts = await _contractStorage.LoadAllContractsByWallet(wallet.WalletIdentifier, token);
-                newViewOfScripts.UnionWith(contracts.Select(c => c.Script));
-            }
+            var contracts = 
+                await _contractStorage.LoadActiveContracts(null, token);
+            
+            var newViewOfScripts =
+                contracts.Select(c => c.Script).ToHashSet();
 
             foreach (var vtxo in await _vtxoStorage.GetUnspentVtxos(token))
             {
