@@ -13,7 +13,7 @@ namespace NArk.Services;
 public class SimpleIntentScheduler(IFeeEstimator feeEstimator, IClientTransport clientTransport, IContractService contractService, IChainTimeProvider chainTimeProvider, IOptions<SimpleIntentSchedulerOptions> options, ILogger<SimpleIntentScheduler>? logger = null) : IIntentScheduler
 {
     public async Task<IReadOnlyCollection<ArkIntentSpec>> GetIntentsToSubmit(
-        IReadOnlyCollection<ArkCoinLite> unspentVtxos, CancellationToken cancellationToken = default)
+        IReadOnlyCollection<ArkCoin> unspentVtxos, CancellationToken cancellationToken = default)
     {
         logger?.LogDebug("Getting intents to submit for {VtxoCount} unspent vtxos", unspentVtxos.Count);
         ArgumentNullException.ThrowIfNull(chainTimeProvider);
@@ -33,8 +33,8 @@ public class SimpleIntentScheduler(IFeeEstimator feeEstimator, IClientTransport 
         var chainTime = await chainTimeProvider.GetChainTime(cancellationToken);
 
         var coins = unspentVtxos
-            .Where(v => v.Recoverable || (v.ExpiryAt is { } exp && exp + options.Value.Threshold > chainTime.Timestamp) ||
-                        (v.ExpiryAtHeight is { } height && height + options.Value.ThresholdHeight > chainTime.Height))
+            .Where(v => v.Recoverable || (v.ExpiresAt is { } exp && exp + options.Value.Threshold > chainTime.Timestamp) ||
+                        (v.ExpiresAtHeight is { } height && height + options.Value.ThresholdHeight > chainTime.Height))
             .GroupBy(v => v.WalletIdentifier);
 
         List<ArkIntentSpec> intentSpecs = [];

@@ -1,7 +1,7 @@
 namespace NArk.Abstractions.Intents;
 
 public record ArkIntentSpec(
-    ArkCoinLite[] Coins,
+    ArkCoin[] Coins,
     ArkTxOut[] Outputs,
     DateTimeOffset ValidFrom,
     DateTimeOffset ValidUntil

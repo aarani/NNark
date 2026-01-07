@@ -4,10 +4,12 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
+using NArk.Abstractions;
 using NArk.Abstractions.Batches;
 using NArk.Abstractions.Batches.ServerEvents;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
+
 using NArk.Abstractions.VTXOs;
 using NArk.Abstractions.Wallets;
 using NArk.Batches;
@@ -16,7 +18,6 @@ using NArk.Events;
 using NArk.Extensions;
 using NArk.Helpers;
 using NArk.Models;
-using NArk.Transactions;
 using NArk.Transport;
 using NBitcoin.Crypto;
 
@@ -27,7 +28,6 @@ namespace NArk.Services;
 /// </summary>
 public class BatchManagementService(
     IIntentStorage intentStorage,
-    IWallet arkWalletService,
     IClientTransport clientTransport,
     IVtxoStorage vtxoStorage,
     ISigningService signingService,
@@ -332,16 +332,11 @@ public class BatchManagementService(
 
             try
             {
-                // Get signer
-                var signer = await arkWalletService.FindSigningEntity(
-                    KeyExtensions.ParseOutputDescriptor(intent.SignerDescriptor, serverInfo.Network),
-                    cancellationToken);
-
-                HashSet<ArkPsbtSigner> allWalletCoins = [];
+                HashSet<ArkCoin> allWalletCoins = [];
                 foreach (var outpoint in allVtxoOutpoints)
                 {
                     allWalletCoins.Add(
-                        await signingService.GetPsbtSigner(
+                        await signingService.GetCoin(
                             await vtxoStorage.GetVtxoByOutPoint(outpoint, cancellationToken) ??
                             throw new InvalidOperationException("Unknown vtxo outpoint"), cancellationToken)
                     );
@@ -351,7 +346,7 @@ public class BatchManagementService(
                 var intentVtxoOutpoints = intent.IntentVtxos.ToHashSet();
 
                 var spendableCoins = allWalletCoins
-                    .Where(coin => intentVtxoOutpoints.Contains(coin.Coin.Outpoint))
+                    .Where(coin => intentVtxoOutpoints.Contains(coin.Outpoint))
                     .ToList();
 
                 if (spendableCoins.Count == 0)
@@ -389,9 +384,9 @@ public class BatchManagementService(
                 // Create and initialize a batch session
                 var session = new BatchSession(
                     clientTransport,
-                    new TransactionHelpers.ArkTransactionBuilder(clientTransport, safetyService, intentStorage),
+                    signingService,
+                    new TransactionHelpers.ArkTransactionBuilder(clientTransport, safetyService, signingService, intentStorage),
                     serverInfo.Network,
-                    signer,
                     intent,
                     [.. spendableCoins],
                     batchEvent);
@@ -547,23 +542,21 @@ public class BatchManagementService(
     }
 
     public BatchManagementService(IIntentStorage intentStorage,
-        IWallet arkWalletService,
         IClientTransport clientTransport,
         IVtxoStorage vtxoStorage,
         ISigningService signingService,
         ISafetyService safetyService)
-        : this(intentStorage, arkWalletService, clientTransport, vtxoStorage, signingService, safetyService, [], null)
+        : this(intentStorage, clientTransport, vtxoStorage, signingService, safetyService, [], null)
     {
     }
 
     public BatchManagementService(IIntentStorage intentStorage,
-        IWallet arkWalletService,
         IClientTransport clientTransport,
         IVtxoStorage vtxoStorage,
         ISigningService signingService,
         ISafetyService safetyService,
         ILogger<BatchManagementService> logger)
-        : this(intentStorage, arkWalletService, clientTransport, vtxoStorage, signingService, safetyService, [], logger)
+        : this(intentStorage, clientTransport, vtxoStorage, signingService, safetyService, [], logger)
     {
     }
 }

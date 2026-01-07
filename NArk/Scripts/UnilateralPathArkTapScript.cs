@@ -1,3 +1,4 @@
+using NArk.Abstractions.Scripts;
 using NArk.Helpers;
 using NBitcoin;
 

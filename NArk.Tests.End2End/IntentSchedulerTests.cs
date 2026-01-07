@@ -50,7 +50,7 @@ public class IntentSchedulerTests
 
         var intentStorage = new InMemoryIntentStorage();
 
-        var signingService = new SigningService(walletDetails.wallet, walletDetails.contracts, walletDetails.clientTransport);
+        var signingService = new SigningService(walletDetails.inMemoryKeyStorage, walletDetails.contracts, walletDetails.clientTransport);
 
         var options =
             new OptionsWrapper<IntentGenerationServiceOptions>(

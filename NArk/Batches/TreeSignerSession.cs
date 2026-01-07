@@ -1,7 +1,10 @@
-﻿using NArk.Abstractions.Wallets;
+﻿using NArk.Abstractions.Helpers;
+using NArk.Abstractions.Wallets;
 using NArk.Extensions;
 using NArk.Helpers;
+using NArk.Services;
 using NBitcoin;
+using NBitcoin.Scripting;
 using NBitcoin.Secp256k1;
 using NBitcoin.Secp256k1.Musig;
 
@@ -12,18 +15,20 @@ namespace NArk.Batches;
 /// </summary>
 public class TreeSignerSession
 {
-    private readonly ISigningEntity _signer;
     private Dictionary<uint256, (MusigPrivNonce secNonce, MusigPubNonce pubNonce)>? _myNonces;
     private Dictionary<uint256, MusigContext>? _musigContexts;
+    private readonly ISigningService _signingService;
     private readonly TxTree _graph;
     private readonly uint256? _tapsciptMerkleRoot;
+    private readonly OutputDescriptor _descriptor;
     private readonly Money _rootSharedOutputAmount;
 
-    public TreeSignerSession(ISigningEntity signer, TxTree tree, uint256? tapsciptMerkleRoot, Money rootInputAmount)
+    public TreeSignerSession(ISigningService signingService, TxTree tree, uint256? tapsciptMerkleRoot, OutputDescriptor descriptor, Money rootInputAmount)
     {
-        _signer = signer;
+        _signingService = signingService;
         _graph = tree;
         _tapsciptMerkleRoot = tapsciptMerkleRoot;
+        _descriptor = descriptor;
         _rootSharedOutputAmount = rootInputAmount;
     }
 
@@ -32,7 +37,7 @@ public class TreeSignerSession
         if (_musigContexts != null)
             throw new InvalidOperationException("musig contexts already created");
         _musigContexts = new Dictionary<uint256, MusigContext>();
-        var myPubKey = (await _signer.GetOutputDescriptor(cancellationToken)).ToPubKey();
+        var myPubKey = _descriptor.ToPubKey();
         foreach (var g in _graph)
         {
             var tx = g.Root.GetGlobalTransaction();
@@ -116,7 +121,7 @@ public class TreeSignerSession
         if (_myNonces != null)
             throw new InvalidOperationException("nonces already generated");
 
-        var myPrivKey = await _signer.DerivePrivateKey(cancellationToken);
+        var myPrivKey = await _signingService.DerivePrivateKey(_descriptor, cancellationToken);
 
         var res = new Dictionary<uint256, (MusigPrivNonce secNonce, MusigPubNonce pubNonce)>();
         foreach (var (txid, musigContext) in _musigContexts!)
@@ -148,7 +153,7 @@ public class TreeSignerSession
 
         // Use the wallet signer to create a MUSIG2 partial signature
         // The context already has the correct sighash from nonce generation
-        var partialSig = await _signer.SignMusig(musigContext, myNonce.secNonce, cancellationToken);
+        var partialSig = await _signingService.SignMusig(_descriptor, musigContext, myNonce.secNonce, cancellationToken);
 
         return partialSig;
     }

@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 using NArk.Abstractions;
 using NArk.Abstractions.Fees;
 using NArk.Abstractions.Intents;
-using NArk.Transactions;
+
 using NArk.Transport;
 using NBitcoin;
 using ICoinSelector = NArk.CoinSelector.ICoinSelector;
@@ -34,11 +34,11 @@ public class OnchainService(IClientTransport clientTransport, IContractService c
         {
             var selectedCoins = coinSelector.SelectCoins([.. availableCoins], outputValueUsedForCoinSelection, serverInfo.Dust, 0);
 
-            var totalInput = selectedCoins.Sum(x => x.Coin.TxOut.Value);
+            var totalInput = selectedCoins.Sum(x => x.TxOut.Value);
             var change = totalInput - output.Value;
 
             var estimatedFeeIfChange = await feeEstimator.EstimateFeeAsync(
-                [.. selectedCoins.Select(c => c.Coin.ToLite())],
+                [.. selectedCoins],
                 [
                     output,
                     new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!)
@@ -56,7 +56,7 @@ public class OnchainService(IClientTransport clientTransport, IContractService c
             else
             {
                 var estimatedFeeIfNoChange = await feeEstimator.EstimateFeeAsync(
-                    [.. selectedCoins.Select(c => c.Coin.ToLite())],
+                    [.. selectedCoins],
                     [output],
                     cancellationToken);
 
@@ -71,17 +71,8 @@ public class OnchainService(IClientTransport clientTransport, IContractService c
             }
         }
     }
-
-    public async Task<Guid> InitiateCollaborativeExit(ArkCoin[] inputs, ArkTxOut[] outputs,
-        CancellationToken cancellationToken = default)
-    {
-        List<ArkPsbtSigner> inputSigners = [];
-        foreach (var input in inputs)
-            inputSigners.Add(await signingService.GetPsbtSigner(input, cancellationToken));
-        return await InitiateCollaborativeExit(inputSigners.ToArray(), outputs, cancellationToken);
-    }
-
-    public async Task<Guid> InitiateCollaborativeExit(ArkPsbtSigner[] inputs, ArkTxOut[] outputs, CancellationToken cancellationToken = default)
+    
+    public async Task<Guid> InitiateCollaborativeExit(ArkCoin[] inputs, ArkTxOut[] outputs, CancellationToken cancellationToken = default)
     {
         logger?.LogDebug("Initiating collaborative exit with {InputCount} inputs and {OutputCount} outputs", inputs.Length, outputs.Length);
         if (outputs.All(o => o.Type == ArkTxOutType.Vtxo))
@@ -89,26 +80,23 @@ public class OnchainService(IClientTransport clientTransport, IContractService c
             logger?.LogWarning("Collaborative exit rejected: no on-chain outputs provided");
             throw new InvalidOperationException("No on-chain outputs provided for collaborative exit.");
         }
-        if (inputs.Select(i => i.Coin.WalletIdentifier).Distinct().Count() != 1)
+        if (inputs.Select(i => i.WalletIdentifier).Distinct().Count() != 1)
         {
             logger?.LogWarning("Collaborative exit rejected: inputs belong to multiple wallets");
             throw new InvalidOperationException("All inputs must belong to the same wallet for collaborative exit.");
         }
-
-        var inputSigners =
-            inputs.ToDictionary(signer => signer.Coin.ToLite(), signer => signer);
-
+        
         var intentSpec = new ArkIntentSpec(
-            [.. inputSigners.Keys],
+            [.. inputs],
             outputs,
             DateTime.UtcNow,
             DateTime.UtcNow.AddHours(1)
         );
 
         var intent =
-            await intentGenerationService.GenerateManualIntent(inputs[0].Coin.WalletIdentifier, intentSpec, inputSigners, true, cancellationToken);
+            await intentGenerationService.GenerateManualIntent(inputs[0].WalletIdentifier, intentSpec, true, cancellationToken);
 
-        logger?.LogInformation("Collaborative exit initiated for wallet {WalletId} with intent {IntentId}", inputs[0].Coin.WalletIdentifier, intent);
+        logger?.LogInformation("Collaborative exit initiated for wallet {WalletId} with intent {IntentId}", inputs[0].WalletIdentifier, intent);
         return intent;
     }
 }

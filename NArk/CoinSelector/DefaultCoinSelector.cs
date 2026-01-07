@@ -1,7 +1,8 @@
 // Should be refactored, this is a copy from old Nark
 
+
+using NArk.Abstractions;
 using NArk.Helpers;
-using NArk.Transactions;
 using NBitcoin;
 
 namespace NArk.CoinSelector;
@@ -16,8 +17,8 @@ public class DefaultCoinSelector : ICoinSelector
     /// <param name="dustThreshold">Dust threshold from operator terms</param>
     /// <param name="currentSubDustOutputs">Whether the user explicitly uses subdust change</param>
     /// <returns>Selected coins or null if impossible</returns>
-    public IReadOnlyCollection<ArkPsbtSigner> SelectCoins(
-        List<ArkPsbtSigner> availableCoins,
+    public IReadOnlyCollection<ArkCoin> SelectCoins(
+        List<ArkCoin> availableCoins,
         Money targetAmount,
         Money dustThreshold,
         int currentSubDustOutputs)
@@ -25,13 +26,13 @@ public class DefaultCoinSelector : ICoinSelector
         if (availableCoins.Count == 0)
             throw new NotEnoughFundsException("Not enough funds to create transaction", null, targetAmount);
 
-        var totalAvailable = availableCoins.Sum(x => x.Coin.TxOut.Value);
+        var totalAvailable = availableCoins.Sum(x => x.TxOut.Value);
         if (totalAvailable < targetAmount)
             throw new NotEnoughFundsException("Not enough funds to create transaction", null, targetAmount - totalAvailable);
 
         // Strategy 1: Try to find an exact match or match with change > dust
         // Start with largest coins first (greedy approach)
-        var selected = new List<ArkPsbtSigner>();
+        var selected = new List<ArkCoin>();
         var currentTotal = Money.Zero;
 
         foreach (var coin in availableCoins)
@@ -46,7 +47,7 @@ public class DefaultCoinSelector : ICoinSelector
             }
 
             selected.Add(coin);
-            currentTotal += coin.Coin.TxOut.Value;
+            currentTotal += coin.TxOut.Value;
         }
 
         var finalChange = currentTotal - targetAmount;
@@ -59,7 +60,7 @@ public class DefaultCoinSelector : ICoinSelector
             var remainingCoins = availableCoins.Except(selected).ToList();
             foreach (var extraCoin in remainingCoins)
             {
-                var newChange = finalChange + extraCoin.Coin.TxOut.Value;
+                var newChange = finalChange + extraCoin.TxOut.Value;
                 if (newChange >= dustThreshold)
                 {
                     selected.Add(extraCoin);
@@ -84,8 +85,8 @@ public class DefaultCoinSelector : ICoinSelector
     /// <summary>
     /// Attempts to find a better coin combination that avoids subdust change
     /// </summary>
-    private List<ArkPsbtSigner>? TryFindBetterCombination(
-        List<ArkPsbtSigner> availableCoins,
+    private List<ArkCoin>? TryFindBetterCombination(
+        List<ArkCoin> availableCoins,
         Money targetAmount,
         Money dustThreshold)
     {
@@ -93,7 +94,7 @@ public class DefaultCoinSelector : ICoinSelector
         // Look for the exact match first
         foreach (var coin in availableCoins)
         {
-            if (coin.Coin.TxOut.Value == targetAmount)
+            if (coin.TxOut.Value == targetAmount)
                 return [coin];
         }
 
@@ -102,7 +103,7 @@ public class DefaultCoinSelector : ICoinSelector
         {
             for (var j = i + 1; j < availableCoins.Count; j++)
             {
-                var total = availableCoins[i].Coin.TxOut.Value + availableCoins[j].Coin.TxOut.Value;
+                var total = availableCoins[i].TxOut.Value + availableCoins[j].TxOut.Value;
                 if (total < targetAmount)
                     continue;
 
@@ -119,7 +120,7 @@ public class DefaultCoinSelector : ICoinSelector
             {
                 for (var k = j + 1; k < availableCoins.Count && k < 10; k++)
                 {
-                    var total = availableCoins[i].Coin.TxOut.Value + availableCoins[j].Coin.TxOut.Value + availableCoins[k].Coin.TxOut.Value;
+                    var total = availableCoins[i].TxOut.Value + availableCoins[j].TxOut.Value + availableCoins[k].TxOut.Value;
                     if (total < targetAmount)
                         continue;
 

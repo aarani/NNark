@@ -5,6 +5,7 @@ using NArk.Abstractions;
 using NArk.Abstractions.Contracts;
 using NArk.Abstractions.Fees;
 using NArk.Abstractions.Intents;
+
 using NArk.Abstractions.VTXOs;
 using NArk.Abstractions.Wallets;
 using NArk.Contracts;
@@ -13,7 +14,6 @@ using NArk.Events;
 using NArk.Extensions;
 using NArk.Models.Options;
 using NArk.Sweeper;
-using NArk.Transactions;
 using NArk.Transport;
 using NBitcoin;
 
@@ -203,28 +203,20 @@ public class SweeperService(
     {
         var totalAmount = coins.Sum(c => c.Amount);
 
-        Dictionary<ArkCoinLite, ArkPsbtSigner> coinToSigners = [];
-        foreach (var coin in coins)
-        {
-            coinToSigners[coin.ToLite()] =
-                new ArkPsbtSigner(coin, await wallet.FindSigningEntity(coin.SignerDescriptor));
-        }
-
         var output = await contractService.DerivePaymentContract(walletIdentifier);
         var feeEstimation = await feeEstimator.EstimateFeeAsync(
-            coinToSigners.Keys.ToArray(),
+            [.. coins],
             [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(totalAmount), output.GetArkAddress())]
         );
 
         await intentGenerationService.GenerateManualIntent(
             walletIdentifier,
             new ArkIntentSpec(
-                coinToSigners.Keys.ToArray(),
+                [.. coins],
                 [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(totalAmount - feeEstimation), output.GetArkAddress())],
                 DateTimeOffset.UtcNow,
                 DateTimeOffset.UtcNow.AddHours(1)
             ),
-            coinToSigners,
             true
         );
     }
@@ -233,22 +225,20 @@ public class SweeperService(
     {
         while (possiblePaths.TryDequeue(out var possiblePath, out _))
         {
-            var signer = await wallet.FindSigningEntity(possiblePath.SignerDescriptor);
-            var psbtSigner = new ArkPsbtSigner(possiblePath, signer);
-
+            
             try
             {
-                var txId = await spendingService.Spend(possiblePath.WalletIdentifier, [psbtSigner], [],
+                var txId = await spendingService.Spend(possiblePath.WalletIdentifier, [possiblePath], [],
                     CancellationToken.None);
                 logger?.LogInformation("Sweep successful for outpoint {Outpoint}, txId: {TxId}", outpoint, txId);
-                await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(psbtSigner.Coin, txId,
+                await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(possiblePath, txId,
                     ActionState.Successful, null));
                 return;
             }
             catch (AlreadyLockedVtxoException ex)
             {
                 logger?.LogWarning(0, ex, "Sweep skipped for outpoint {Outpoint}: vtxo is already locked", outpoint);
-                await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(psbtSigner.Coin, null,
+                await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(possiblePath, null,
                     ActionState.Failed, "Vtxo is already locked by another process."));
                 return;
             }
@@ -257,7 +247,7 @@ public class SweeperService(
                 if (possiblePaths.Count == 0)
                 {
                     logger?.LogError(0, ex, "All sweep paths failed for outpoint {Outpoint}", outpoint);
-                    await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(psbtSigner.Coin, null,
+                    await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(possiblePath, null,
                         ActionState.Failed, $"All sweeping paths failed, ex: {ex}"));
                 }
                 else
@@ -271,7 +261,7 @@ public class SweeperService(
     private static ArkUnspendableCoin GetUnspendableCoin(ArkVtxo vtxo, ArkContractEntity contract,
         ArkServerInfo serverInfo)
     {
-        var parsedContract = ArkContract.Parse(contract.Type, contract.AdditionalData, serverInfo.Network);
+        var parsedContract = ArkContractParser.Parse(contract.Type, contract.AdditionalData, serverInfo.Network);
         if (parsedContract is null)
             throw new UnableToSignUnknownContracts(
                 $"Could not parse contract belonging to vtxo {vtxo.TransactionId}:{vtxo.TransactionOutputIndex}");

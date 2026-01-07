@@ -1,7 +1,7 @@
-using NArk.Contracts;
+using NArk.Abstractions.Contracts;
 using NBitcoin;
 
-namespace NArk;
+namespace NArk.Abstractions;
 
 public class ArkUnspendableCoin : Coin
 {

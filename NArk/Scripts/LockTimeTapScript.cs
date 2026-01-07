@@ -1,4 +1,5 @@
-﻿using NBitcoin;
+﻿using NArk.Abstractions.Scripts;
+using NBitcoin;
 
 namespace NArk.Scripts;
 

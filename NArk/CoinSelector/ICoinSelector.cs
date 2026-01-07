@@ -1,12 +1,13 @@
-using NArk.Transactions;
+
+using NArk.Abstractions;
 using NBitcoin;
 
 namespace NArk.CoinSelector;
 
 public interface ICoinSelector
 {
-    IReadOnlyCollection<ArkPsbtSigner> SelectCoins(
-        List<ArkPsbtSigner> availableCoins,
+    IReadOnlyCollection<ArkCoin> SelectCoins(
+        List<ArkCoin> availableCoins,
         Money targetAmount,
         Money dustThreshold,
         int currentSubDustOutputs);

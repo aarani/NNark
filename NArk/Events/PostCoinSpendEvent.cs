@@ -1,3 +1,4 @@
+using NArk.Abstractions;
 using NArk.Enums;
 using NBitcoin;
 

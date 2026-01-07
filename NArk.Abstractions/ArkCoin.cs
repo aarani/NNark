@@ -1,11 +1,10 @@
-using NArk.Abstractions;
-using NArk.Contracts;
-using NArk.Helpers;
-using NArk.Scripts;
+using NArk.Abstractions.Contracts;
+using NArk.Abstractions.Helpers;
+using NArk.Abstractions.Scripts;
 using NBitcoin;
 using NBitcoin.Scripting;
 
-namespace NArk;
+namespace NArk.Abstractions;
 
 public class ArkCoin : Coin
 {
@@ -79,7 +78,19 @@ public class ArkCoin : Coin
 
         return psbtInput;
     }
+    
+    public double GetRawExpiry()
+    {
+        if (ExpiresAt is not null)
+        {
+            return ExpiresAt.Value.ToUnixTimeSeconds();
+        }
 
-    public ArkCoinLite ToLite() =>
-        new(WalletIdentifier, Outpoint, TxOut, Recoverable, Birth, ExpiresAtHeight, ExpiresAt, Contract is ArkNoteContract);
+        if (ExpiresAtHeight is not null)
+        {
+            return ExpiresAtHeight.Value;
+        }
+
+        return 0;
+    }
 }

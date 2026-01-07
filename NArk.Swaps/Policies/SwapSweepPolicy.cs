@@ -1,3 +1,4 @@
+using NArk.Abstractions;
 using NArk.Abstractions.Wallets;
 using NArk.Contracts;
 using NArk.Swaps.Abstractions;

@@ -64,14 +64,14 @@ public class VtxoSynchronizationTests
 
         // Create a new wallet
         var inMemoryWalletStorage = new InMemoryWalletStorage();
+        var inMemoryKeyStorage =  new InMemoryKeyStorage();
         var contracts = new InMemoryContractStorage();
         var safetyService = new AsyncSafetyService();
-        var wallet = new SimpleSeedWallet(safetyService, clientTransport, inMemoryWalletStorage);
+        var wallet = new SimpleSeedWallet(safetyService, clientTransport, inMemoryWalletStorage, inMemoryKeyStorage);
         await wallet.CreateNewWallet("wallet1");
 
         // Start vtxo synchronization service
         await using var vtxoSync = new VtxoSynchronizationService(
-            inMemoryWalletStorage,
             vtxoStorage,
             contracts,
             clientTransport
@@ -81,11 +81,11 @@ public class VtxoSynchronizationTests
         var contractService = new ContractService(wallet, contracts, clientTransport);
 
         // Generate a new payment contract, save to storage
-        var signer = await wallet.GetNewSigningEntity("wallet1");
+        var signer = await wallet.GetNewSigningDescriptor("wallet1");
         var contract = new ArkPaymentContract(
             info.SignerKey,
             info.UnilateralExit,
-            await signer.GetOutputDescriptor()
+            signer
         );
         await contractService.ImportContract("wallet1", contract);
 
@@ -108,13 +108,14 @@ public class VtxoSynchronizationTests
 
         // Create a new wallet
         var inMemoryWalletStorage = new InMemoryWalletStorage();
+        var inMemoryKeyStorage = new InMemoryKeyStorage();
         var contracts = new InMemoryContractStorage();
 
         var vtxoStorage = new InMemoryVtxoStorage();
 
         var safetyService = new AsyncSafetyService();
 
-        var wallet = new SimpleSeedWallet(safetyService, clientTransport, inMemoryWalletStorage);
+        var wallet = new SimpleSeedWallet(safetyService, clientTransport, inMemoryWalletStorage, inMemoryKeyStorage);
         await wallet.CreateNewWallet("wallet1");
         await wallet.CreateNewWallet("wallet2");
 
@@ -122,7 +123,6 @@ public class VtxoSynchronizationTests
 
         // Start vtxo synchronization service
         await using var vtxoSync = new VtxoSynchronizationService(
-            inMemoryWalletStorage,
             vtxoStorage,
             contracts,
             clientTransport
@@ -164,7 +164,7 @@ public class VtxoSynchronizationTests
         var wallet2Address = contract2.GetArkAddress();
 
         var spendingService = new SpendingService(vtxoStorage, contracts,
-            new SigningService(wallet, contracts, clientTransport), contractService, clientTransport, new DefaultCoinSelector(), safetyService, new InMemoryIntentStorage());
+            new SigningService(inMemoryKeyStorage, contracts, clientTransport), contractService, clientTransport, new DefaultCoinSelector(), safetyService, new InMemoryIntentStorage());
 
         await spendingService.Spend("wallet1",
         [

@@ -1,4 +1,6 @@
-﻿using NArk.Enums;
+﻿using NArk.Abstractions.Contracts;
+using NArk.Abstractions.Scripts;
+using NArk.Enums;
 using NArk.Scripts;
 using NBitcoin;
 using NBitcoin.DataEncoders;

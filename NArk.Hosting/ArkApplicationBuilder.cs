@@ -60,7 +60,13 @@ public static class AppExtensions
             _hostBuilder.ConfigureServices(services => { services.AddSingleton<IVtxoStorage, TStorage>(); });
             return this;
         }
-
+        
+        public ArkApplicationBuilder WithKeyStorage<TStorage>() where TStorage : class, IKeyStorage
+        {
+            _hostBuilder.ConfigureServices(services => { services.AddSingleton<IKeyStorage, TStorage>(); });
+            return this;
+        }
+        
         public ArkApplicationBuilder WithWalletStorage<TStorage>() where TStorage : class, IWalletStorage
         {
             _hostBuilder.ConfigureServices(services => { services.AddSingleton<IWalletStorage, TStorage>(); });

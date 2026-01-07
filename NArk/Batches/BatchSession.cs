@@ -1,16 +1,19 @@
 using System.Text.Json;
+using NArk.Abstractions;
 using NArk.Abstractions.Batches;
 using NArk.Abstractions.Batches.ServerEvents;
 using NArk.Abstractions.Intents;
+
 using NArk.Abstractions.Wallets;
 using NArk.Extensions;
 using NArk.Helpers;
 using NArk.Models;
 using NArk.Scripts;
-using NArk.Transactions;
+using NArk.Services;
 using NArk.Transport;
 using NBitcoin;
 using NBitcoin.DataEncoders;
+using NBitcoin.Scripting;
 using NBitcoin.Secp256k1.Musig;
 
 namespace NArk.Batches;
@@ -20,13 +23,14 @@ namespace NArk.Batches;
 /// </summary>
 public class BatchSession(
     IClientTransport clientTransport,
+    ISigningService signingService,
     TransactionHelpers.ArkTransactionBuilder arkTransactionBuilder,
     Network network,
-    ISigningEntity signer,
     ArkIntent arkIntent,
-    ArkPsbtSigner[] ins,
+    ArkCoin[] ins,
     BatchStartedEvent batchStartedEvent)
 {
+    private readonly OutputDescriptor _outputDescriptor = OutputDescriptor.Parse(arkIntent.SignerDescriptor, network);
     private readonly string _batchId = batchStartedEvent.Id;
     private readonly Messages.RegisterIntentMessage? _intentParameters =
         JsonSerializer.Deserialize<Messages.RegisterIntentMessage>(arkIntent.RegisterProofMessage);
@@ -156,16 +160,17 @@ public class BatchSession(
         if (sharedOutput?.Value == null)
             throw new InvalidOperationException("Shared output not found in commitment transaction");
 
+        
         // Create a signing session
-        var session = new TreeSignerSession(signer, vtxoGraph, sweepTapTreeRoot, sharedOutput.Value);
+        var session = new TreeSignerSession(signingService, vtxoGraph, sweepTapTreeRoot, _outputDescriptor, sharedOutput.Value);
 
         // Generate and submit nonces
         var nonces = await session.GetNoncesAsync(cancellationToken);
-        var pubKey = await signer.GetPublicKey();
+        var pubKey = OutputDescriptorHelpers.Extract(_outputDescriptor).PubKey;
 
         var request = new SubmitTreeNoncesRequest(
             signingEvent.Id,
-            pubKey.ToBytes().ToHexStringLower(),
+            pubKey!.ToBytes().ToHexStringLower(),
             nonces.ToDictionary(pair => pair.Key.ToString(), pair => pair.Value.ToBytes().ToHexStringLower())
         );
 
@@ -188,7 +193,7 @@ public class BatchSession(
         // Sign and submit signatures
         var signatures = await session.SignAsync(cancellationToken);
 
-        var pubKey = await signer.GetPublicKey();
+        var pubKey = OutputDescriptorHelpers.Extract(_outputDescriptor).PubKey!;
 
         await clientTransport.SubmitTreeSignaturesRequest(
             new SubmitTreeSignaturesRequest(_batchId, pubKey.ToBytes().ToHexStringLower(),
@@ -220,7 +225,7 @@ public class BatchSession(
         foreach (var vtxoCoin in ins)
         {
             // Skip recoverable coins (notes) - they don't need forfeit transactions
-            if (vtxoCoin.Coin.Recoverable)
+            if (vtxoCoin.Recoverable)
             {
                 continue;
             }

@@ -1,8 +1,10 @@
+using NBitcoin.Scripting;
+
 namespace NArk.Abstractions.Wallets;
 
 public record ArkWallet(
     string WalletIdentifier,
     string WalletFingerprint,
-    byte[] WalletPrivateBytes,
+    string WalletDescriptor,
     int LastAddressIndex = 0
 );

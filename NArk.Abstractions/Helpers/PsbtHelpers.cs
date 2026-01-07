@@ -4,7 +4,7 @@ using NBitcoin;
 using NBitcoin.Protocol;
 using NBitcoin.Secp256k1;
 
-namespace NArk.Helpers;
+namespace NArk.Abstractions.Helpers;
 
 public static class PsbtHelpers
 {

@@ -22,7 +22,6 @@ public class VtxoSynchronizationService : IAsyncDisposable
     private readonly Channel<HashSet<string>> _readyToPoll =
         Channel.CreateBounded<HashSet<string>>(new BoundedChannelOptions(5));
 
-    private readonly IWalletStorage _walletStorage;
     private readonly IVtxoStorage _vtxoStorage;
     private readonly IContractStorage _contractStorage;
     private readonly IClientTransport _arkClientTransport;
@@ -33,17 +32,16 @@ public class VtxoSynchronizationService : IAsyncDisposable
         IContractStorage contractStorage,
         IClientTransport arkClientTransport,
         ILogger<VtxoSynchronizationService> logger)
-        : this(walletStorage, vtxoStorage, contractStorage, arkClientTransport)
+        : this(vtxoStorage, contractStorage, arkClientTransport)
     {
         _logger = logger;
     }
 
-    public VtxoSynchronizationService(IWalletStorage walletStorage,
+    public VtxoSynchronizationService(
         IVtxoStorage vtxoStorage,
         IContractStorage contractStorage,
         IClientTransport arkClientTransport)
     {
-        _walletStorage = walletStorage;
         _vtxoStorage = vtxoStorage;
         _contractStorage = contractStorage;
         _arkClientTransport = arkClientTransport;

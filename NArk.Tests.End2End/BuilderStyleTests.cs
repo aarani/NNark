@@ -58,6 +58,7 @@ public class BuilderStyleTests
             .WithIntentScheduler<SimpleIntentScheduler>()
             .WithSwapStorage<InMemorySwapStorage>()
             .WithContractStorage<InMemoryContractStorage>()
+            .WithKeyStorage<InMemoryKeyStorage>()
             .WithVtxoStorage<InMemoryVtxoStorage>()
             .WithWalletStorage<InMemoryWalletStorage>()
             .WithWallet<SimpleSeedWallet>()

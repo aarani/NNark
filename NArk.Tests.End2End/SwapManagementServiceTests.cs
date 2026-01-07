@@ -59,14 +59,15 @@ public class SwapManagementServiceTests
             new OptionsWrapper<BoltzClientOptions>(new BoltzClientOptions()
             { BoltzUrl = boltzApi.ToString(), WebsocketUrl = boltzWs.ToString() }));
         var intentStorage = new InMemoryIntentStorage();
+        var signingService = new SigningService(testingPrerequisite.inMemoryKeyStorage, testingPrerequisite.contracts,
+            testingPrerequisite.clientTransport);
         await using var swapMgr = new SwapsManagementService(
             new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
-                new SigningService(testingPrerequisite.wallet, testingPrerequisite.contracts,
-                    testingPrerequisite.clientTransport),
+                signingService,
                 testingPrerequisite.contractService, testingPrerequisite.clientTransport, new DefaultCoinSelector(), testingPrerequisite.safetyService, intentStorage),
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
             testingPrerequisite.wallet,
-            swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, intentStorage, boltzClient);
+            swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, signingService, intentStorage, boltzClient);
 
         var settledSwapTcs = new TaskCompletionSource();
 
@@ -105,7 +106,7 @@ public class SwapManagementServiceTests
                 new IntentGenerationServiceOptions() { PollInterval = TimeSpan.FromMinutes(5) }
             );
 
-        var signingService = new SigningService(testingPrerequisite.wallet, testingPrerequisite.contracts,
+        var signingService = new SigningService(testingPrerequisite.inMemoryKeyStorage, testingPrerequisite.contracts,
                 testingPrerequisite.clientTransport);
 
         // The threshold is so high, it will force an intent generation
@@ -131,7 +132,7 @@ public class SwapManagementServiceTests
             spendingService,
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
             testingPrerequisite.wallet,
-            swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, intentStorage, boltzClient);
+            swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, signingService,  intentStorage, boltzClient);
 
         var settledSwapTcs = new TaskCompletionSource();
 
@@ -167,14 +168,15 @@ public class SwapManagementServiceTests
             new OptionsWrapper<BoltzClientOptions>(new BoltzClientOptions()
             { BoltzUrl = boltzApi.ToString(), WebsocketUrl = boltzWs.ToString() }));
         var intentStorage = new InMemoryIntentStorage();
+        var signingService = new SigningService(testingPrerequisite.inMemoryKeyStorage, testingPrerequisite.contracts,
+            testingPrerequisite.clientTransport);
         await using var swapMgr = new SwapsManagementService(
             new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
-                new SigningService(testingPrerequisite.wallet, testingPrerequisite.contracts,
-                    testingPrerequisite.clientTransport),
+                signingService,
                 testingPrerequisite.contractService, testingPrerequisite.clientTransport, new DefaultCoinSelector(), testingPrerequisite.safetyService, intentStorage),
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
             testingPrerequisite.wallet,
-            swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, intentStorage, boltzClient);
+            swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, signingService, intentStorage, boltzClient);
 
         var refundedSwapTcs = new TaskCompletionSource();
 

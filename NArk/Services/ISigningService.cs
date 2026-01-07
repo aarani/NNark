@@ -1,13 +1,33 @@
+using NArk.Abstractions;
 using NArk.Abstractions.Contracts;
+
 using NArk.Abstractions.VTXOs;
-using NArk.Transactions;
+using NBitcoin;
+using NBitcoin.Scripting;
+using NBitcoin.Secp256k1;
+using NBitcoin.Secp256k1.Musig;
 
 namespace NArk.Services;
 
 public interface ISigningService
 {
-    Task<ArkPsbtSigner> GetPsbtSigner(ArkVtxo vtxo, CancellationToken cancellationToken = default);
-    Task<ArkPsbtSigner> GetPsbtSigner(ArkCoin coin, CancellationToken cancellationToken = default);
-    Task<ArkPsbtSigner> GetVtxoPsbtSignerByContract(ArkContractEntity contractEntity, ArkVtxo vtxo,
+    Task<ArkCoin> GetVtxoCoinByContract(ArkContractEntity contractEntity, ArkVtxo vtxo,
         CancellationToken cancellationToken = default);
+
+    Task<ArkCoin> GetCoin(ArkVtxo vtxo, CancellationToken cancellationToken = default);
+
+    Task<MusigPartialSignature> SignMusig(
+        OutputDescriptor descriptor,
+        MusigContext context,
+        MusigPrivNonce nonce,
+        CancellationToken cancellationToken = default);
+    
+    Task SignAndFillPsbt(ArkCoin coin,
+        PSBT psbt,
+        TaprootReadyPrecomputedTransactionData precomputedTransactionData,
+        TaprootSigHash sigHash = TaprootSigHash.Default,
+        CancellationToken cancellationToken = default);
+
+    Task<ECPrivKey> DerivePrivateKey(OutputDescriptor descriptor, CancellationToken cancellationToken = default);
+
 }

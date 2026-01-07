@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using NArk.Abstractions;
 using NBitcoin.Secp256k1;
 
 namespace NArk.Tests;

@@ -5,6 +5,7 @@ using NArk.Abstractions;
 using NArk.Abstractions.Contracts;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
+
 using NArk.Abstractions.VTXOs;
 using NArk.Abstractions.Wallets;
 using NArk.Contracts;
@@ -17,7 +18,6 @@ using NArk.Swaps.Boltz.Models.Swaps.Submarine;
 using NArk.Swaps.Boltz.Models.WebSocket;
 using NArk.Swaps.Helpers;
 using NArk.Swaps.Models;
-using NArk.Transactions;
 using NArk.Transport;
 using NBitcoin;
 using NBitcoin.Secp256k1;
@@ -60,6 +60,7 @@ public class SwapsManagementService : IAsyncDisposable
         IContractService contractService,
         IContractStorage contractStorage,
         ISafetyService safetyService,
+        ISigningService signingService,
         IIntentStorage intentStorage,
         BoltzClient boltzClient
     )
@@ -78,7 +79,7 @@ public class SwapsManagementService : IAsyncDisposable
             _clientTransport
         );
         _transactionBuilder =
-            new TransactionHelpers.ArkTransactionBuilder(clientTransport, safetyService, intentStorage);
+            new TransactionHelpers.ArkTransactionBuilder(clientTransport, safetyService, signingService, intentStorage);
 
         swapsStorage.SwapsChanged += OnSwapsChanged;
         // It is possible to listen for vtxos on scripts and use them to figure out the state of swaps
@@ -226,13 +227,10 @@ public class SwapsManagementService : IAsyncDisposable
         var serverInfo = await _clientTransport.GetServerInfoAsync();
 
         // Parse the VHTLC contract
-        if (ArkContract.Parse(swap.ContractScript, serverInfo.Network) is not VHTLCContract contract)
+        if (ArkContractParser.Parse(swap.ContractScript, serverInfo.Network) is not VHTLCContract contract)
         {
             throw new InvalidOperationException("Failed to parse VHTLC contract for refund");
         }
-
-        // Get the wallet signer
-        var signingEntity = await _wallet.FindSigningEntity(contract.Sender, CancellationToken.None);
 
         // Get VTXOs for this contract
         var vtxos = await _vtxoStorage.GetVtxosByScripts([contract.GetArkAddress().ScriptPubKey.ToHex()], false,
@@ -246,9 +244,6 @@ public class SwapsManagementService : IAsyncDisposable
         // Use the first VTXO (should only be one for a swap)
         var vtxo = vtxos.Single();
 
-        if (vtxo.Recoverable)
-            throw new NotImplementedException("Recoverable scenario is not implemented");
-
         // Get the user's wallet address for refund destination
         var refundAddress =
             await _contractService.DerivePaymentContract(swap.WalletId, CancellationToken.None);
@@ -259,10 +254,8 @@ public class SwapsManagementService : IAsyncDisposable
 
         var arkCoin = contract.ToCoopRefundCoin(swap.WalletId, vtxo);
 
-        var signer = new ArkPsbtSigner(arkCoin, signingEntity);
-
         var (arkTx, checkpoints) =
-            await _transactionBuilder.ConstructArkTransaction([signer],
+            await _transactionBuilder.ConstructArkTransaction([arkCoin],
                 [new ArkTxOut(ArkTxOutType.Vtxo, arkCoin.Amount, refundAddress.GetArkAddress())],
                 serverInfo, CancellationToken.None);
 
@@ -286,7 +279,7 @@ public class SwapsManagementService : IAsyncDisposable
         arkTx.UpdateFrom(boltzSignedRefundPsbt);
         checkpoint.Psbt.UpdateFrom(boltzSignedCheckpointPsbt);
 
-        await _transactionBuilder.SubmitArkTransaction([signer], arkTx, [checkpoint],
+        await _transactionBuilder.SubmitArkTransaction([arkCoin], arkTx, [checkpoint],
             CancellationToken.None);
 
         var newSwap =
@@ -365,9 +358,9 @@ public class SwapsManagementService : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         var serverInfo = await _clientTransport.GetServerInfoAsync(cancellationToken);
-        var refundEntity = await _wallet.GetNewSigningEntity(walletId, cancellationToken);
+        var refundDescriptor = await _wallet.GetNewSigningDescriptor(walletId, cancellationToken);
         var swap = await _boltzService.CreateSubmarineSwap(invoice,
-            await refundEntity.GetOutputDescriptor(cancellationToken),
+            refundDescriptor,
             cancellationToken);
         await _swapsStorage.SaveSwap(
             walletId,
@@ -443,11 +436,11 @@ public class SwapsManagementService : IAsyncDisposable
     public async Task<string> InitiateReverseSwap(string walletId, CreateInvoiceParams invoiceParams,
         CancellationToken cancellationToken = default)
     {
-        var destinationEntity = await _wallet.GetNewSigningEntity(walletId, cancellationToken);
+        var destinationDescriptor = await _wallet.GetNewSigningDescriptor(walletId, cancellationToken);
         var revSwap =
             await _boltzService.CreateReverseSwap(
                 invoiceParams,
-                await destinationEntity.GetOutputDescriptor(cancellationToken),
+                destinationDescriptor,
                 cancellationToken
             );
         await _contractService.ImportContract(walletId, revSwap.Contract, cancellationToken);

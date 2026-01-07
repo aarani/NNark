@@ -3,12 +3,12 @@ using NArk.Abstractions;
 using NArk.Abstractions.Contracts;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
+
 using NArk.Abstractions.VTXOs;
 using NArk.Enums;
 using NArk.Events;
 using NArk.Extensions;
 using NArk.Helpers;
-using NArk.Transactions;
 using NArk.Transport;
 using NBitcoin;
 using ICoinSelector = NArk.CoinSelector.ICoinSelector;
@@ -53,14 +53,14 @@ public class SpendingService(
     {
     }
 
-    public async Task<uint256> Spend(string walletId, ArkPsbtSigner[] inputs, ArkTxOut[] outputs, CancellationToken cancellationToken = default)
+    public async Task<uint256> Spend(string walletId, ArkCoin[] inputs, ArkTxOut[] outputs, CancellationToken cancellationToken = default)
     {
         logger?.LogDebug("Spending {InputCount} inputs with {OutputCount} outputs for wallet {WalletId}", inputs.Length, outputs.Length, walletId);
         try
         {
             var serverInfo = await transport.GetServerInfoAsync(cancellationToken);
 
-            var totalInput = inputs.Sum(x => x.Coin.TxOut.Value);
+            var totalInput = inputs.Sum(x => x.TxOut.Value);
 
             var outputsSumInSatoshis = outputs.Sum(o => o.Value);
 
@@ -96,12 +96,12 @@ public class SpendingService(
                 outputs = [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!), .. outputs];
             }
 
-            var transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(transport, safetyService, intentStorage);
+            var transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(transport, safetyService, signingService, intentStorage);
 
             var txId = await transactionBuilder.ConstructAndSubmitArkTransaction(inputs, outputs, cancellationToken);
 
             logger?.LogInformation("Spend transaction {TxId} completed successfully for wallet {WalletId}", txId, walletId);
-            await postSpendEventHandlers.SafeHandleEventAsync(new PostCoinsSpendActionEvent(inputs.Select(i => i.Coin).ToArray(), txId,
+            await postSpendEventHandlers.SafeHandleEventAsync(new PostCoinsSpendActionEvent([.. inputs], txId,
                 ActionState.Successful, null), cancellationToken: cancellationToken);
 
             return txId;
@@ -109,14 +109,14 @@ public class SpendingService(
         catch (Exception ex)
         {
             logger?.LogError(0, ex, "Spend transaction failed for wallet {WalletId}", walletId);
-            await postSpendEventHandlers.SafeHandleEventAsync(new PostCoinsSpendActionEvent(inputs.Select(i => i.Coin).ToArray(), null,
+            await postSpendEventHandlers.SafeHandleEventAsync(new PostCoinsSpendActionEvent([.. inputs], null,
                 ActionState.Failed, $"Spending coins failed with ex: {ex}"), cancellationToken: cancellationToken);
 
             throw;
         }
     }
 
-    public async Task<IReadOnlySet<ArkPsbtSigner>> GetAvailableCoins(string walletId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlySet<ArkCoin>> GetAvailableCoins(string walletId, CancellationToken cancellationToken = default)
     {
         logger?.LogDebug("Getting available coins for wallet {WalletId}", walletId);
         var contracts = await contractStorage.LoadActiveContracts([walletId], cancellationToken);
@@ -130,7 +130,7 @@ public class SpendingService(
             vtxos
                 .GroupBy(v => contractByScript[v.Script]);
 
-        HashSet<ArkPsbtSigner> coins = [];
+        HashSet<ArkCoin> coins = [];
         foreach (var vtxosByContract in vtxosByContracts)
         {
             foreach (var vtxo in vtxosByContract)
@@ -138,7 +138,7 @@ public class SpendingService(
                 try
                 {
                     coins.Add(
-                        await signingService.GetVtxoPsbtSignerByContract(vtxosByContract.Key, vtxo, cancellationToken));
+                        await signingService.GetVtxoCoinByContract(vtxosByContract.Key, vtxo, cancellationToken));
                 }
                 catch (AdditionalInformationRequiredException ex)
                 {
@@ -172,7 +172,7 @@ public class SpendingService(
             vtxos
                 .GroupBy(v => contractByScript[v.Script]);
 
-        HashSet<ArkPsbtSigner> coins = [];
+        HashSet<ArkCoin> coins = [];
         foreach (var vtxosByContract in vtxosByContracts)
         {
             foreach (var vtxo in vtxosByContract)
@@ -180,7 +180,7 @@ public class SpendingService(
                 try
                 {
                     coins.Add(
-                        await signingService.GetVtxoPsbtSignerByContract(vtxosByContract.Key, vtxo, cancellationToken));
+                        await signingService.GetVtxoCoinByContract(vtxosByContract.Key, vtxo, cancellationToken));
                 }
                 catch (AdditionalInformationRequiredException ex)
                 {
@@ -195,7 +195,7 @@ public class SpendingService(
 
         try
         {
-            var totalInput = selectedCoins.Sum(x => x.Coin.TxOut.Value);
+            var totalInput = selectedCoins.Sum(x => x.TxOut.Value);
             var change = totalInput - outputsSumInSatoshis;
 
             // Only derive a new change address if we actually need change
@@ -225,12 +225,12 @@ public class SpendingService(
                 outputs = [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!), .. outputs];
             }
 
-            var transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(transport, safetyService, intentStorage);
+            var transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(transport, safetyService, signingService, intentStorage);
 
             var txId = await transactionBuilder.ConstructAndSubmitArkTransaction(selectedCoins, outputs, cancellationToken);
 
             logger?.LogInformation("Spend transaction {TxId} completed successfully for wallet {WalletId} with automatic coin selection", txId, walletId);
-            await postSpendEventHandlers.SafeHandleEventAsync(new PostCoinsSpendActionEvent(coins.Select(i => i.Coin).ToArray(), txId,
+            await postSpendEventHandlers.SafeHandleEventAsync(new PostCoinsSpendActionEvent(coins.ToArray(), txId,
                 ActionState.Successful, null), cancellationToken: cancellationToken);
 
             return txId;
@@ -238,7 +238,7 @@ public class SpendingService(
         catch (Exception ex)
         {
             logger?.LogError(0, ex, "Spend transaction with automatic coin selection failed for wallet {WalletId}", walletId);
-            await postSpendEventHandlers.SafeHandleEventAsync(new PostCoinsSpendActionEvent(coins.Select(i => i.Coin).ToArray(), null,
+            await postSpendEventHandlers.SafeHandleEventAsync(new PostCoinsSpendActionEvent(coins.ToArray(), null,
                 ActionState.Failed, $"Spending selected coins failed with ex: {ex}"), cancellationToken: cancellationToken);
 
             throw;

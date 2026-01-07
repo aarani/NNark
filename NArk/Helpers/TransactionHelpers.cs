@@ -1,10 +1,13 @@
 using NArk.Abstractions;
+using NArk.Abstractions.Contracts;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
+using NArk.Abstractions.Scripts;
+
 using NArk.Contracts;
 using NArk.Models;
 using NArk.Scripts;
-using NArk.Transactions;
+using NArk.Services;
 using NArk.Transport;
 using NBitcoin;
 
@@ -20,18 +23,19 @@ public static class TransactionHelpers
     public class ArkTransactionBuilder(
         IClientTransport clientTransport,
         ISafetyService safetyService,
+        ISigningService signingService,
         IIntentStorage intentStorage)
     {
-        private async Task<PSBT> FinalizeCheckpointTx(PSBT checkpointTx, PSBT receivedCheckpointTx, ArkPsbtSigner coin,
+        private async Task<PSBT> FinalizeCheckpointTx(PSBT checkpointTx, PSBT receivedCheckpointTx, ArkCoin coin,
             CancellationToken cancellationToken)
         {
             // Sign the checkpoint transaction
             var checkpointGtx = receivedCheckpointTx.GetGlobalTransaction();
             var checkpointPrecomputedTransactionData =
-                checkpointGtx.PrecomputeTransactionData([coin.Coin.TxOut]);
+                checkpointGtx.PrecomputeTransactionData([coin.TxOut]);
 
             receivedCheckpointTx.UpdateFrom(checkpointTx);
-            await coin.SignAndFillPsbt(receivedCheckpointTx, checkpointPrecomputedTransactionData,
+            await signingService.SignAndFillPsbt(coin, receivedCheckpointTx, checkpointPrecomputedTransactionData,
                 cancellationToken: cancellationToken);
 
             return receivedCheckpointTx;
@@ -46,7 +50,7 @@ public static class TransactionHelpers
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>The Ark transaction and checkpoint transactions with their input witnesses</returns>
         public async Task<(PSBT arkTx, SortedSet<IndexedPSBT> checkpoints)> ConstructArkTransaction(
-            IEnumerable<ArkPsbtSigner> coins,
+            IEnumerable<ArkCoin> coins,
             TxOut[] outputs,
             ArkServerInfo serverInfo,
             CancellationToken cancellationToken)
@@ -54,7 +58,7 @@ public static class TransactionHelpers
             var p2A = Script.FromHex("51024e73"); // Standard Ark protocol marker
 
             List<PSBT> checkpoints = [];
-            List<ArkPsbtSigner> checkpointCoins = [];
+            List<ArkCoin> checkpointCoins = [];
             foreach (var coin in coins)
             {
                 // Create a checkpoint contract
@@ -64,13 +68,13 @@ public static class TransactionHelpers
                 var checkpoint = serverInfo.Network.CreateTransactionBuilder();
                 checkpoint.SetVersion(3);
                 checkpoint.SetFeeWeight(0);
-                checkpoint.AddCoin(coin.Coin, new CoinOptions()
+                checkpoint.AddCoin(coin, new CoinOptions()
                 {
-                    Sequence = coin.Coin.Sequence
+                    Sequence = coin.Sequence
                 });
                 checkpoint.DustPrevention = false;
-                checkpoint.Send(checkpointContract.GetArkAddress(), coin.Coin.Amount);
-                checkpoint.SetLockTime(coin.Coin.LockTime ?? LockTime.Zero);
+                checkpoint.Send(checkpointContract.GetArkAddress(), coin.Amount);
+                checkpoint.SetLockTime(coin.LockTime ?? LockTime.Zero);
                 var checkpointTx = checkpoint.BuildPSBT(false, PSBTVersion.PSBTv0);
 
                 //checkpoints MUST have the p2a output at index '1' and NBitcoin tx builder does not assure it, so we hack our way there
@@ -79,7 +83,7 @@ public static class TransactionHelpers
                 checkpointTx = PSBT.FromTransaction(ctx, serverInfo.Network, PSBTVersion.PSBTv0);
                 checkpoint.UpdatePSBT(checkpointTx);
 
-                _ = coin.Coin.FillPsbtInput(checkpointTx);
+                _ = coin.FillPsbtInput(checkpointTx);
                 checkpoints.Add(checkpointTx);
 
                 // Create a checkpoint coin for the Ark transaction
@@ -88,24 +92,21 @@ public static class TransactionHelpers
                 var outpoint = new OutPoint(checkpointTx.GetGlobalTransaction(), txout.Index);
 
                 checkpointCoins.Add(
-                    coin with
-                    {
-                        Coin = new ArkCoin(
-                            coin.Coin.WalletIdentifier,
-                            checkpointContract,
-                            coin.Coin.Birth,
-                            coin.Coin.ExpiresAt,
-                            coin.Coin.ExpiresAtHeight,
-                            outpoint,
-                            txout.GetTxOut()!,
-                            coin.Coin.SignerDescriptor,
-                            coin.Coin.SpendingScriptBuilder,
-                            coin.Coin.SpendingConditionWitness,
-                            coin.Coin.LockTime,
-                            coin.Coin.Sequence,
-                            coin.Coin.Recoverable
-                        )
-                    }
+                    new ArkCoin(
+                        coin.WalletIdentifier,
+                        checkpointContract,
+                        coin.Birth,
+                        coin.ExpiresAt,
+                        coin.ExpiresAtHeight,
+                        outpoint,
+                        txout.GetTxOut()!,
+                        coin.SignerDescriptor,
+                        coin.SpendingScriptBuilder,
+                        coin.SpendingConditionWitness,
+                        coin.LockTime,
+                        coin.Sequence,
+                        coin.Recoverable
+                    )
                 );
             }
 
@@ -116,7 +117,7 @@ public static class TransactionHelpers
             arkTx.SetFeeWeight(0);
             arkTx.DustPrevention = false;
             // arkTx.Send(p2a, Money.Zero);
-            arkTx.AddCoins(checkpointCoins.Select(c => c.Coin));
+            arkTx.AddCoins(checkpointCoins);
 
             // Track OP_RETURN outputs to enforce the limit
             // First, count any existing OP_RETURN outputs
@@ -166,17 +167,17 @@ public static class TransactionHelpers
 
             var sortedCheckpointCoins =
                 tx.Inputs.ToDictionary(input => (int)input.Index,
-                    input => checkpointCoins.Single(x => x.Coin.Outpoint == input.PrevOut));
+                    input => checkpointCoins.Single(x => x.Outpoint == input.PrevOut));
 
             // Sign each input in the Ark transaction
             var precomputedTransactionData =
-                gtx.PrecomputeTransactionData(sortedCheckpointCoins.OrderBy(x => x.Key).Select(x => x.Value.Coin.TxOut)
+                gtx.PrecomputeTransactionData(sortedCheckpointCoins.OrderBy(x => x.Key).Select(x => x.Value.TxOut)
                     .ToArray());
 
 
             foreach (var (_, coin) in sortedCheckpointCoins)
             {
-                await coin.SignAndFillPsbt(tx, precomputedTransactionData, cancellationToken: cancellationToken);
+                await signingService.SignAndFillPsbt(coin, tx, precomputedTransactionData, cancellationToken: cancellationToken);
             }
 
             //reorder the checkpoints to match the order of the inputs of the Ark transaction
@@ -193,23 +194,23 @@ public static class TransactionHelpers
         /// <summary>
         /// Creates a checkpoint contract based on the input contract type
         /// </summary>
-        private ArkContract CreateCheckpointContract(ArkPsbtSigner coin, UnilateralPathArkTapScript serverUnrollScript)
+        private ArkContract CreateCheckpointContract(ArkCoin coin, UnilateralPathArkTapScript serverUnrollScript)
         {
-            if (coin.Coin.Contract.Server is null)
+            if (coin.Contract.Server is null)
                 throw new ArgumentException("Server key is required for checkpoint contract creation");
 
 
             var scriptBuilders = new List<ScriptBuilder>
             {
-                coin.Coin.SpendingScriptBuilder,
+                coin.SpendingScriptBuilder,
                 serverUnrollScript
             };
 
-            return new GenericArkContract(coin.Coin.Contract.Server, scriptBuilders);
+            return new GenericArkContract(coin.Contract.Server, scriptBuilders);
         }
 
         public async Task SubmitArkTransaction(
-            IReadOnlyCollection<ArkPsbtSigner> arkCoins,
+            IReadOnlyCollection<ArkCoin> arkCoins,
             PSBT arkTx,
             SortedSet<IndexedPSBT> checkpoints,
             CancellationToken cancellationToken
@@ -228,7 +229,7 @@ public static class TransactionHelpers
             SortedSet<IndexedPSBT> signedCheckpoints = [];
             foreach (var signedCheckpoint in checkpoints)
             {
-                var coin = arkCoins.Single(x => x.Coin.Outpoint == signedCheckpoint.Psbt.Inputs.Single().PrevOut);
+                var coin = arkCoins.Single(x => x.Outpoint == signedCheckpoint.Psbt.Inputs.Single().PrevOut);
                 var psbt = await FinalizeCheckpointTx(signedCheckpoint.Psbt,
                     parsedReceivedCheckpoints[signedCheckpoint.Psbt.GetGlobalTransaction().GetHash()], coin,
                     cancellationToken);
@@ -241,7 +242,7 @@ public static class TransactionHelpers
 
 
         public async Task<uint256> ConstructAndSubmitArkTransaction(
-            IReadOnlyCollection<ArkPsbtSigner> arkCoins,
+            IReadOnlyCollection<ArkCoin> arkCoins,
             ArkTxOut[] arkOutputs,
             CancellationToken cancellationToken)
         {
@@ -251,7 +252,7 @@ public static class TransactionHelpers
 
             foreach (var coin in arkCoins)
             {
-                if (!await safetyService.TryLockByTimeAsync($"vtxo::{coin.Coin.Outpoint}",
+                if (!await safetyService.TryLockByTimeAsync($"vtxo::{coin.Outpoint}",
                         TimeSpan.FromMinutes(1)))
                 {
                     throw new AlreadyLockedVtxoException(
@@ -263,12 +264,12 @@ public static class TransactionHelpers
                 await ConstructArkTransaction(arkCoins, [.. arkOutputs], serverInfo, cancellationToken);
             await SubmitArkTransaction(arkCoins, arkTx, checkpoints, cancellationToken);
 
-            foreach (var spentCoins in arkCoins.GroupBy(c => c.Coin.WalletIdentifier))
+            foreach (var spentCoins in arkCoins.GroupBy(c => c.WalletIdentifier))
             {
                 var intents =
                     await intentStorage.GetIntentsByInputs(
                         spentCoins.Key,
-                        [.. spentCoins.Select(c => c.Coin.Outpoint)],
+                        [.. spentCoins.Select(c => c.Outpoint)],
                         true,
                         CancellationToken.None
                     );
@@ -287,11 +288,10 @@ public static class TransactionHelpers
             return arkTx.GetGlobalTransaction().GetHash();
         }
 
-        public async Task<PSBT> ConstructForfeitTx(ArkServerInfo arkServerInfo, ArkPsbtSigner signer, Coin? connector,
+        public async Task<PSBT> ConstructForfeitTx(ArkServerInfo arkServerInfo, ArkCoin coin, Coin? connector,
             IDestination forfeitDestination, CancellationToken cancellationToken = default)
         {
-            var coin = signer.Coin;
-            var p2a = Script.FromHex("51024e73"); // Standard Ark protocol marker
+            var p2A = Script.FromHex("51024e73"); // Standard Ark protocol marker
 
             // Determine sighash based on whether we have a connector
             // Without connector: ANYONECANPAY|ALL (allows adding connector later)
@@ -330,7 +330,7 @@ public static class TransactionHelpers
             // Add P2A output
             var forfeitTx = txBuilder.BuildPSBT(false, PSBTVersion.PSBTv0);
             var gtx = forfeitTx.GetGlobalTransaction();
-            gtx.Outputs.Add(new TxOut(Money.Zero, p2a));
+            gtx.Outputs.Add(new TxOut(Money.Zero, p2A));
             forfeitTx = PSBT.FromTransaction(gtx, arkServerInfo.Network, PSBTVersion.PSBTv0);
             txBuilder.UpdatePSBT(forfeitTx);
 
@@ -351,7 +351,7 @@ public static class TransactionHelpers
             var precomputedTransactionData =
                 gtx.PrecomputeTransactionData(sortedCheckpointCoins.OrderBy(x => x.Key).Select(x => x.Value).ToArray());
 
-            await signer.SignAndFillPsbt(forfeitTx, precomputedTransactionData, sighash, cancellationToken);
+            await signingService.SignAndFillPsbt(coin, forfeitTx, precomputedTransactionData, sighash, cancellationToken);
 
             return forfeitTx;
         }

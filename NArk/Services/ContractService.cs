@@ -32,11 +32,11 @@ public class ContractService(
     {
         logger?.LogDebug("Deriving payment contract for wallet {WalletId}", walletId);
         var info = await transport.GetServerInfoAsync(cancellationToken);
-        var signingEntity = await wallet.GetNewSigningEntity(walletId, cancellationToken);
+        var signingDescriptor = await wallet.GetNewSigningDescriptor(walletId, cancellationToken);
         var contract = new ArkPaymentContract(
             info.SignerKey,
             info.UnilateralExit,
-            await signingEntity.GetOutputDescriptor(cancellationToken)
+            signingDescriptor
         );
         await contractStorage.SaveContract(walletId, contract.ToEntity(walletId), cancellationToken);
         await eventHandlers.SafeHandleEventAsync(new NewContractActionEvent(contract, walletId), cancellationToken);

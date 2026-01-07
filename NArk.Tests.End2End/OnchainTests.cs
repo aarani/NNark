@@ -11,9 +11,11 @@ using NArk.Hosting;
 using NArk.Models.Options;
 using NArk.Safety.AsyncKeyedLock;
 using NArk.Services;
+using NArk.Swaps.Helpers;
 using NArk.Tests.End2End.TestPersistance;
 using NArk.Wallets;
 using NBitcoin;
+using NBitcoin.Scripting;
 
 namespace NArk.Tests.End2End;
 
@@ -57,6 +59,7 @@ public class OnchainTests
                 .WithIntentScheduler<SimpleIntentScheduler>()
                 .WithSwapStorage<InMemorySwapStorage>()
                 .WithContractStorage<InMemoryContractStorage>()
+                .WithKeyStorage<InMemoryKeyStorage>()
                 .WithVtxoStorage<InMemoryVtxoStorage>()
                 .WithWalletStorage<InMemoryWalletStorage>()
                 .WithWallet<SimpleSeedWallet>()
@@ -95,8 +98,7 @@ public class OnchainTests
 
         var destination =
             new TaprootAddress(
-                new TaprootPubKey((await (await wallet.GetNewSigningEntity("wallet2")).GetPublicKey()).ToXOnlyPubKey()
-                    .ToBytes()), Network.RegTest);
+                new TaprootPubKey((await wallet.GetNewSigningDescriptor("wallet2")).Extract().XOnlyPubKey!.ToBytes()), Network.RegTest);
 
         var onchainService = arkHost.Services.GetRequiredService<IOnchainService>();
         await onchainService.InitiateCollaborativeExit(

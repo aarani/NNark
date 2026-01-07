@@ -1,6 +1,6 @@
 ﻿using NBitcoin;
 
-namespace NArk.Scripts;
+namespace NArk.Abstractions.Scripts;
 
 public abstract class ScriptBuilder
 {

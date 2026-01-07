@@ -1,3 +1,5 @@
+using NArk.Abstractions;
+
 namespace NArk.Sweeper;
 
 public interface ISweepPolicy
