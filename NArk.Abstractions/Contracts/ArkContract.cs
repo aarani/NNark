@@ -60,5 +60,4 @@ public abstract class ArkContract(OutputDescriptor server)
 
     protected abstract IEnumerable<ScriptBuilder> GetScriptBuilders();
     protected abstract Dictionary<string, string> GetContractData();
-    public abstract ArkCoin ToArkCoin(string walletIdentifier, ArkVtxo vtxo);
 }

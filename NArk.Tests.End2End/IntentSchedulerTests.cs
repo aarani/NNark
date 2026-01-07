@@ -7,6 +7,7 @@ using NArk.Models.Options;
 using NArk.Services;
 using NArk.Tests.End2End.Common;
 using NArk.Tests.End2End.TestPersistance;
+using NArk.Transformers;
 using NBitcoin;
 
 namespace NArk.Tests.End2End;
@@ -50,7 +51,7 @@ public class IntentSchedulerTests
 
         var intentStorage = new InMemoryIntentStorage();
 
-        var signingService = new SigningService(walletDetails.inMemoryKeyStorage, walletDetails.contracts, walletDetails.clientTransport);
+        var signingService = new SigningService(walletDetails.inMemoryKeyStorage);
 
         var options =
             new OptionsWrapper<IntentGenerationServiceOptions>(
@@ -73,8 +74,10 @@ public class IntentSchedulerTests
             }
         };
 
+        var coinService = new CoinService(walletDetails.clientTransport, walletDetails.contracts,
+            [new PaymentContractTransformer(), new HashLockedContractTransformer()]);
         await using var intentGeneration = new IntentGenerationService(walletDetails.clientTransport,
-            new DefaultFeeEstimator(walletDetails.clientTransport), signingService, intentStorage, walletDetails.safetyService,
+            new DefaultFeeEstimator(walletDetails.clientTransport), coinService, signingService, intentStorage, walletDetails.safetyService,
             walletDetails.contracts, walletDetails.vtxoStorage, scheduler,
             options);
         await using var intentSync = new IntentSynchronizationService(intentStorage, walletDetails.clientTransport, walletDetails.safetyService);

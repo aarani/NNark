@@ -19,6 +19,7 @@ public class SpendingService(
     IVtxoStorage vtxoStorage,
     IContractStorage contractStorage,
     ISigningService signingService,
+    ICoinService coinService,
     IContractService paymentService,
     IClientTransport transport,
     ICoinSelector coinSelector,
@@ -31,25 +32,27 @@ public class SpendingService(
     public SpendingService(IVtxoStorage vtxoStorage,
         IContractStorage contractStorage,
         ISigningService signingService,
+        ICoinService coinService,
         IContractService paymentService,
         IClientTransport transport,
         ICoinSelector coinSelector,
         ISafetyService safetyService,
         IIntentStorage intentStorage)
-        : this(vtxoStorage, contractStorage, signingService, paymentService, transport, coinSelector, safetyService, intentStorage, [], null)
+        : this(vtxoStorage, contractStorage, signingService, coinService, paymentService, transport, coinSelector, safetyService, intentStorage, [], null)
     {
     }
 
     public SpendingService(IVtxoStorage vtxoStorage,
         IContractStorage contractStorage,
         ISigningService signingService,
+        ICoinService coinService,
         IContractService paymentService,
         IClientTransport transport,
         ICoinSelector coinSelector,
         ISafetyService safetyService,
         IIntentStorage intentStorage,
         ILogger<SpendingService> logger)
-        : this(vtxoStorage, contractStorage, signingService, paymentService, transport, coinSelector, safetyService, intentStorage, [], logger)
+        : this(vtxoStorage, contractStorage, signingService, coinService, paymentService, transport, coinSelector, safetyService, intentStorage, [], logger)
     {
     }
 
@@ -138,7 +141,7 @@ public class SpendingService(
                 try
                 {
                     coins.Add(
-                        await signingService.GetVtxoCoinByContract(vtxosByContract.Key, vtxo, cancellationToken));
+                        await coinService.GetCoin(vtxosByContract.Key, vtxo, cancellationToken));
                 }
                 catch (AdditionalInformationRequiredException ex)
                 {
@@ -180,7 +183,7 @@ public class SpendingService(
                 try
                 {
                     coins.Add(
-                        await signingService.GetVtxoCoinByContract(vtxosByContract.Key, vtxo, cancellationToken));
+                        await coinService.GetCoin(vtxosByContract.Key, vtxo, cancellationToken));
                 }
                 catch (AdditionalInformationRequiredException ex)
                 {

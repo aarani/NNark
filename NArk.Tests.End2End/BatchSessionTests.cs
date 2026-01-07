@@ -7,6 +7,7 @@ using NArk.Models.Options;
 using NArk.Services;
 using NArk.Tests.End2End.Common;
 using NArk.Tests.End2End.TestPersistance;
+using NArk.Transformers;
 using NBitcoin;
 
 namespace NArk.Tests.End2End;
@@ -44,6 +45,8 @@ public class BatchSessionTests
     {
         var walletDetails = await FundedWalletHelper.GetFundedWallet(_app);
 
+        var coinService = new CoinService(walletDetails.clientTransport, walletDetails.contracts,
+            [new PaymentContractTransformer(), new HashLockedContractTransformer()]);
 
         var intentStorage = new InMemoryIntentStorage();
 
@@ -73,14 +76,14 @@ public class BatchSessionTests
             }
         };
 
-        var signingService = new SigningService(walletDetails.inMemoryKeyStorage, walletDetails.contracts,
-            walletDetails.clientTransport);
+        var signingService = new SigningService(walletDetails.inMemoryKeyStorage);
 
         var intentGenerationOptions = new OptionsWrapper<IntentGenerationServiceOptions>(new IntentGenerationServiceOptions()
         { PollInterval = TimeSpan.FromHours(5) });
 
         await using var intentGeneration = new IntentGenerationService(walletDetails.clientTransport,
             new DefaultFeeEstimator(walletDetails.clientTransport),
+            coinService,
             signingService,
             intentStorage,
             walletDetails.safetyService,
@@ -98,7 +101,7 @@ public class BatchSessionTests
 
         await using var batchManager = new BatchManagementService(intentStorage,
             walletDetails.clientTransport, walletDetails.vtxoStorage,
-            signingService, walletDetails.safetyService);
+            signingService, coinService, walletDetails.safetyService);
 
         await batchManager.StartAsync(CancellationToken.None);
 

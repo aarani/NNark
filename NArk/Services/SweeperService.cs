@@ -7,7 +7,6 @@ using NArk.Abstractions.Fees;
 using NArk.Abstractions.Intents;
 
 using NArk.Abstractions.VTXOs;
-using NArk.Abstractions.Wallets;
 using NArk.Contracts;
 using NArk.Enums;
 using NArk.Events;
@@ -34,22 +33,6 @@ public class SweeperService(
 {
     public SweeperService(
         IFeeEstimator feeEstimator,
-        IWallet wallet,
-        IClientTransport clientTransport,
-        IEnumerable<ISweepPolicy> policies,
-        IVtxoStorage vtxoStorage,
-        IIntentGenerationService intentGenerationService,
-        IContractService contractService,
-        IContractStorage contractStorage,
-        ISpendingService spendingService,
-        IOptions<SweeperServiceOptions> options)
-            : this(feeEstimator, clientTransport, policies, vtxoStorage, intentGenerationService, contractService, contractStorage, spendingService, options, [], null)
-    {
-    }
-
-    public SweeperService(
-        IFeeEstimator feeEstimator,
-        IWallet wallet,
         IClientTransport clientTransport,
         IEnumerable<ISweepPolicy> policies,
         IVtxoStorage vtxoStorage,
@@ -60,6 +43,20 @@ public class SweeperService(
         IOptions<SweeperServiceOptions> options,
         ILogger<SweeperService> logger)
             : this(feeEstimator, clientTransport, policies, vtxoStorage, intentGenerationService, contractService, contractStorage, spendingService, options, [], logger)
+    {
+    }
+    
+    public SweeperService(
+        IFeeEstimator feeEstimator,
+        IClientTransport clientTransport,
+        IEnumerable<ISweepPolicy> policies,
+        IVtxoStorage vtxoStorage,
+        IIntentGenerationService intentGenerationService,
+        IContractService contractService,
+        IContractStorage contractStorage,
+        ISpendingService spendingService,
+        IOptions<SweeperServiceOptions> options)
+        : this(feeEstimator, clientTransport, policies, vtxoStorage, intentGenerationService, contractService, contractStorage, spendingService, options, [], null)
     {
     }
 

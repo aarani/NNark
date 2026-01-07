@@ -7,6 +7,7 @@ using NArk.Contracts;
 using NArk.Safety.AsyncKeyedLock;
 using NArk.Services;
 using NArk.Tests.End2End.TestPersistance;
+using NArk.Transformers;
 using NArk.Transport.GrpcClient;
 using NArk.Wallets;
 using NBitcoin;
@@ -163,8 +164,12 @@ public class VtxoSynchronizationTests
         var contract2 = await contractService.DerivePaymentContract("wallet2");
         var wallet2Address = contract2.GetArkAddress();
 
+        
+        var coinService = new CoinService(clientTransport, contracts,
+            [new PaymentContractTransformer(), new HashLockedContractTransformer()]);
+
         var spendingService = new SpendingService(vtxoStorage, contracts,
-            new SigningService(inMemoryKeyStorage, contracts, clientTransport), contractService, clientTransport, new DefaultCoinSelector(), safetyService, new InMemoryIntentStorage());
+            new SigningService(inMemoryKeyStorage), coinService, contractService, clientTransport, new DefaultCoinSelector(), safetyService, new InMemoryIntentStorage());
 
         await spendingService.Spend("wallet1",
         [

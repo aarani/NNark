@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using NArk.Abstractions;
 using NArk.Abstractions.Fees;
 using NArk.Abstractions.Intents;
 using NArk.CoinSelector;
@@ -8,6 +9,7 @@ using NArk.Sweeper;
 using NArk.Swaps.Abstractions;
 using NArk.Swaps.Policies;
 using NArk.Swaps.Services;
+using NArk.Transformers;
 
 namespace NArk.Hosting;
 
@@ -24,6 +26,9 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddArkCoreServices(this IServiceCollection services)
     {
+        services.AddSingleton<ICoinService, CoinService>();
+        services.AddTransient<IContractTransformer, PaymentContractTransformer>();
+        services.AddTransient<IContractTransformer, HashLockedContractTransformer>();
         services.AddSingleton<SpendingService>();
         services.AddSingleton<ISpendingService>(s => s.GetRequiredService<SpendingService>());
         services.AddSingleton<ISigningService, SigningService>();

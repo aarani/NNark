@@ -54,12 +54,6 @@ public class ArkPaymentContract(OutputDescriptor server, Sequence exitDelay, Out
         return data;
     }
 
-    public override ArkCoin ToArkCoin(string walletIdentifier, ArkVtxo vtxo)
-    {
-        return new ArkCoin(walletIdentifier, this, vtxo.CreatedAt, vtxo.ExpiresAt, vtxo.ExpiresAtHeight, vtxo.OutPoint, vtxo.TxOut, User ?? throw new InvalidOperationException("User is required for claim script generation"),
-            CollaborativePath(), null, null, null, vtxo.Recoverable);
-    }
-
     public static ArkContract Parse(Dictionary<string, string> contractData, Network network)
     {
         var server = KeyExtensions.ParseOutputDescriptor(contractData["server"], network);

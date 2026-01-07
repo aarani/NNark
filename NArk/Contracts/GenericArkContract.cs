@@ -20,9 +20,4 @@ public class GenericArkContract(OutputDescriptor server, IEnumerable<ScriptBuild
     {
         return contractData ?? [];
     }
-
-    public override ArkCoin ToArkCoin(string walletIdentifier, ArkVtxo vtxo)
-    {
-        throw new UnableToSignUnknownContracts("Unable to sign generic contract");
-    }
 }

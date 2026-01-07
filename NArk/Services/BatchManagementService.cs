@@ -30,6 +30,7 @@ public class BatchManagementService(
     IClientTransport clientTransport,
     IVtxoStorage vtxoStorage,
     ISigningService signingService,
+    ICoinService coinService,
     ISafetyService safetyService,
     IEnumerable<IEventHandler<PostBatchSessionEvent>> eventHandlers,
     ILogger<BatchManagementService>? logger = null)
@@ -335,7 +336,7 @@ public class BatchManagementService(
                 foreach (var outpoint in allVtxoOutpoints)
                 {
                     allWalletCoins.Add(
-                        await signingService.GetCoin(
+                        await coinService.GetCoin(
                             await vtxoStorage.GetVtxoByOutPoint(outpoint, cancellationToken) ??
                             throw new InvalidOperationException("Unknown vtxo outpoint"), cancellationToken)
                     );
@@ -544,8 +545,9 @@ public class BatchManagementService(
         IClientTransport clientTransport,
         IVtxoStorage vtxoStorage,
         ISigningService signingService,
+        ICoinService coinService,
         ISafetyService safetyService)
-        : this(intentStorage, clientTransport, vtxoStorage, signingService, safetyService, [])
+        : this(intentStorage, clientTransport, vtxoStorage, signingService, coinService, safetyService, [])
     {
     }
 
@@ -553,9 +555,10 @@ public class BatchManagementService(
         IClientTransport clientTransport,
         IVtxoStorage vtxoStorage,
         ISigningService signingService,
+        ICoinService coinService,
         ISafetyService safetyService,
         ILogger<BatchManagementService> logger)
-        : this(intentStorage, clientTransport, vtxoStorage, signingService, safetyService, [], logger)
+        : this(intentStorage, clientTransport, vtxoStorage, signingService, coinService, safetyService, [], logger)
     {
     }
 }

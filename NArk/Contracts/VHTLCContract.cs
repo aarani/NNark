@@ -107,11 +107,6 @@ public class VHTLCContract : ArkContract
         return data;
     }
 
-    public override ArkCoin ToArkCoin(string walletIdentifier, ArkVtxo vtxo)
-    {
-        throw new AdditionalInformationRequiredException("This operation requires more info than we have here");
-    }
-
     public ArkCoin ToCoopRefundCoin(string walletIdentifier, ArkVtxo vtxo)
     {
         return new ArkCoin(walletIdentifier, this, vtxo.CreatedAt, vtxo.ExpiresAt, vtxo.ExpiresAtHeight, vtxo.OutPoint, vtxo.TxOut, Sender,

@@ -21,6 +21,7 @@ namespace NArk.Services;
 public class IntentGenerationService(
     IClientTransport clientTransport,
     IFeeEstimator feeEstimator,
+    ICoinService coinService,
     ISigningService signingService,
     IIntentStorage intentStorage,
     ISafetyService safetyService,
@@ -69,7 +70,7 @@ public class IntentGenerationService(
                     {
                         try
                         {
-                            var coin = await signingService.GetVtxoCoinByContract(activeContractsByScript[vtxo.Script], vtxo, token);
+                            var coin = await coinService.GetCoin(activeContractsByScript[vtxo.Script], vtxo, token);
                             coins.Add(coin);
                         }
                         catch (AdditionalInformationRequiredException ex)

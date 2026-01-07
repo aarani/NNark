@@ -63,13 +63,7 @@ public class HashLockedArkPaymentContract(
 
         return data;
     }
-
-    public override ArkCoin ToArkCoin(string walletIdentifier, ArkVtxo vtxo)
-    {
-        return new ArkCoin(walletIdentifier, this, vtxo.CreatedAt, vtxo.ExpiresAt, vtxo.ExpiresAtHeight, vtxo.OutPoint, vtxo.TxOut, User ?? throw new InvalidOperationException("User is required for claim script generation"),
-            CreateClaimScript(), new WitScript(Op.GetPushOp(Preimage)), null, null, vtxo.Recoverable);
-    }
-
+    
     protected override IEnumerable<ScriptBuilder> GetScriptBuilders()
     {
         return [

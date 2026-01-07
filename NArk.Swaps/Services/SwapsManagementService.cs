@@ -244,6 +244,9 @@ public class SwapsManagementService : IAsyncDisposable
         // Use the first VTXO (should only be one for a swap)
         var vtxo = vtxos.Single();
 
+        if (vtxo.Recoverable)
+            return;
+
         // Get the user's wallet address for refund destination
         var refundAddress =
             await _contractService.DerivePaymentContract(swap.WalletId, CancellationToken.None);

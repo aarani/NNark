@@ -11,11 +11,6 @@ namespace NArk.Services;
 
 public interface ISigningService
 {
-    Task<ArkCoin> GetVtxoCoinByContract(ArkContractEntity contractEntity, ArkVtxo vtxo,
-        CancellationToken cancellationToken = default);
-
-    Task<ArkCoin> GetCoin(ArkVtxo vtxo, CancellationToken cancellationToken = default);
-
     Task<MusigPartialSignature> SignMusig(
         OutputDescriptor descriptor,
         MusigContext context,
