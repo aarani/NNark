@@ -14,6 +14,11 @@ public class ChainTimeProvider : IChainTimeProvider
     {
         _client = new ExplorerClient(new NBXplorerNetworkProvider(network.ChainName).GetBTC(), uri);
     }
+    
+    public ChainTimeProvider(ExplorerClient explorerClient)
+    {
+        _client = explorerClient;
+    }
 
     public ChainTimeProvider(IOptions<ChainTimeProviderOptions> options)
         : this(options.Value.Network, options.Value.Uri) { }
