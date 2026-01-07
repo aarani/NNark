@@ -78,7 +78,7 @@ public class ArkCoin : Coin
 
         return psbtInput;
     }
-    
+
     public double GetRawExpiry()
     {
         if (ExpiresAt is not null)

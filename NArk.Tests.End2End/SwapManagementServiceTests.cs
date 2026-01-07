@@ -132,7 +132,7 @@ public class SwapManagementServiceTests
             spendingService,
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
             testingPrerequisite.wallet,
-            swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, signingService,  intentStorage, boltzClient);
+            swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, signingService, intentStorage, boltzClient);
 
         var settledSwapTcs = new TaskCompletionSource();
 

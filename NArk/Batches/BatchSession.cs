@@ -160,7 +160,7 @@ public class BatchSession(
         if (sharedOutput?.Value == null)
             throw new InvalidOperationException("Shared output not found in commitment transaction");
 
-        
+
         // Create a signing session
         var session = new TreeSignerSession(signingService, vtxoGraph, sweepTapTreeRoot, _outputDescriptor, sharedOutput.Value);
 

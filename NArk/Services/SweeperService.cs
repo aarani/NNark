@@ -21,7 +21,6 @@ namespace NArk.Services;
 
 public class SweeperService(
     IFeeEstimator feeEstimator,
-    IWallet wallet,
     IClientTransport clientTransport,
     IEnumerable<ISweepPolicy> policies,
     IVtxoStorage vtxoStorage,
@@ -44,7 +43,7 @@ public class SweeperService(
         IContractStorage contractStorage,
         ISpendingService spendingService,
         IOptions<SweeperServiceOptions> options)
-            : this(feeEstimator, wallet, clientTransport, policies, vtxoStorage, intentGenerationService, contractService, contractStorage, spendingService, options, [], null)
+            : this(feeEstimator, clientTransport, policies, vtxoStorage, intentGenerationService, contractService, contractStorage, spendingService, options, [], null)
     {
     }
 
@@ -60,7 +59,7 @@ public class SweeperService(
         ISpendingService spendingService,
         IOptions<SweeperServiceOptions> options,
         ILogger<SweeperService> logger)
-            : this(feeEstimator, wallet, clientTransport, policies, vtxoStorage, intentGenerationService, contractService, contractStorage, spendingService, options, [], logger)
+            : this(feeEstimator, clientTransport, policies, vtxoStorage, intentGenerationService, contractService, contractStorage, spendingService, options, [], logger)
     {
     }
 
@@ -225,7 +224,7 @@ public class SweeperService(
     {
         while (possiblePaths.TryDequeue(out var possiblePath, out _))
         {
-            
+
             try
             {
                 var txId = await spendingService.Spend(possiblePath.WalletIdentifier, [possiblePath], [],

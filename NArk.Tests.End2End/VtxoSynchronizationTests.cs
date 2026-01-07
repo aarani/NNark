@@ -64,7 +64,7 @@ public class VtxoSynchronizationTests
 
         // Create a new wallet
         var inMemoryWalletStorage = new InMemoryWalletStorage();
-        var inMemoryKeyStorage =  new InMemoryKeyStorage();
+        var inMemoryKeyStorage = new InMemoryKeyStorage();
         var contracts = new InMemoryContractStorage();
         var safetyService = new AsyncSafetyService();
         var wallet = new SimpleSeedWallet(safetyService, clientTransport, inMemoryWalletStorage, inMemoryKeyStorage);

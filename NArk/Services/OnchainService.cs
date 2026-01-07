@@ -9,7 +9,7 @@ using ICoinSelector = NArk.CoinSelector.ICoinSelector;
 
 namespace NArk.Services;
 
-public class OnchainService(IClientTransport clientTransport, IContractService contractService, ISpendingService spendingService, ISigningService signingService, IIntentGenerationService intentGenerationService, IFeeEstimator feeEstimator, ICoinSelector coinSelector, ILogger<OnchainService>? logger = null) : IOnchainService
+public class OnchainService(IClientTransport clientTransport, IContractService contractService, ISpendingService spendingService, IIntentGenerationService intentGenerationService, IFeeEstimator feeEstimator, ICoinSelector coinSelector, ILogger<OnchainService>? logger = null) : IOnchainService
 {
     public async Task<Guid> InitiateCollaborativeExit(string walletId, ArkTxOut output,
         CancellationToken cancellationToken = default)
@@ -71,7 +71,7 @@ public class OnchainService(IClientTransport clientTransport, IContractService c
             }
         }
     }
-    
+
     public async Task<Guid> InitiateCollaborativeExit(ArkCoin[] inputs, ArkTxOut[] outputs, CancellationToken cancellationToken = default)
     {
         logger?.LogDebug("Initiating collaborative exit with {InputCount} inputs and {OutputCount} outputs", inputs.Length, outputs.Length);
@@ -85,7 +85,7 @@ public class OnchainService(IClientTransport clientTransport, IContractService c
             logger?.LogWarning("Collaborative exit rejected: inputs belong to multiple wallets");
             throw new InvalidOperationException("All inputs must belong to the same wallet for collaborative exit.");
         }
-        
+
         var intentSpec = new ArkIntentSpec(
             [.. inputs],
             outputs,

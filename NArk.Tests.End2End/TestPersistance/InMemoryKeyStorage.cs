@@ -4,11 +4,11 @@ using NBitcoin;
 
 namespace NArk.Tests.End2End.TestPersistance;
 
-internal class InMemoryKeyStorage: IKeyStorage
+internal class InMemoryKeyStorage : IKeyStorage
 {
     private ConcurrentDictionary<string, ExtKey> _keys = [];
     private ConcurrentDictionary<string, string> _fingerprintToWalletId = [];
-    
+
     public async Task AddPrivateKeyAsync(string walletIdentifier, ExtKey extKey, CancellationToken cancellationToken = default)
     {
         _keys[walletIdentifier] = extKey;

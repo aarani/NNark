@@ -55,5 +55,5 @@ public class SimpleSeedWallet(ISafetyService safetyService, IClientTransport cli
         return GetDescriptorFromIndex(network, walletData.WalletDescriptor, walletData.LastAddressIndex);
     }
 
-    
+
 }

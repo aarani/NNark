@@ -11,7 +11,6 @@ using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
 
 using NArk.Abstractions.VTXOs;
-using NArk.Abstractions.Wallets;
 using NArk.Batches;
 using NArk.Enums;
 using NArk.Events;
@@ -546,7 +545,7 @@ public class BatchManagementService(
         IVtxoStorage vtxoStorage,
         ISigningService signingService,
         ISafetyService safetyService)
-        : this(intentStorage, clientTransport, vtxoStorage, signingService, safetyService, [], null)
+        : this(intentStorage, clientTransport, vtxoStorage, signingService, safetyService, [])
     {
     }
 

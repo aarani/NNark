@@ -95,9 +95,9 @@ public class VtxoSynchronizationService : IAsyncDisposable
         await _viewSyncLock.WaitAsync(token);
         try
         {
-            var contracts = 
+            var contracts =
                 await _contractStorage.LoadActiveContracts(null, token);
-            
+
             var newViewOfScripts =
                 contracts.Select(c => c.Script).ToHashSet();
 

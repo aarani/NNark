@@ -69,13 +69,13 @@ public class SigningService(
         var extKey = await keyStorage.GetPrivateKeyAsync(OutputDescriptorHelpers.Extract(descriptor).WalletId, cancellationToken);
         return await DerivePrivateKey(extKey, descriptor, cancellationToken);
     }
-    
+
     private Task<ECPrivKey> DerivePrivateKey(ExtKey extKey, OutputDescriptor descriptor, CancellationToken cancellationToken = default)
     {
         var info = OutputDescriptorHelpers.Extract(descriptor);
         return Task.FromResult(ECPrivKey.Create(extKey.Derive(info.FullPath!).PrivateKey.ToBytes()));
     }
-    
+
     public async Task SignAndFillPsbt(ArkCoin coin, PSBT psbt, TaprootReadyPrecomputedTransactionData precomputedTransactionData,
         TaprootSigHash sigHash = TaprootSigHash.Default, CancellationToken cancellationToken = default)
     {
@@ -93,7 +93,7 @@ public class SigningService(
 
         var extKey = await keyStorage.GetPrivateKeyAsync(coin.WalletIdentifier, cancellationToken);
         var privateKey = await DerivePrivateKey(extKey, coin.SignerDescriptor, cancellationToken);
-        
+
         var sig = privateKey.SignBIP340(hash.ToBytes());
 
         psbtInput.SetTaprootScriptSpendSignature(privateKey.CreateXOnlyPubKey(), coin.SpendingScript.LeafHash, sig);

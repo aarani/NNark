@@ -21,7 +21,7 @@ public interface ISigningService
         MusigContext context,
         MusigPrivNonce nonce,
         CancellationToken cancellationToken = default);
-    
+
     Task SignAndFillPsbt(ArkCoin coin,
         PSBT psbt,
         TaprootReadyPrecomputedTransactionData precomputedTransactionData,

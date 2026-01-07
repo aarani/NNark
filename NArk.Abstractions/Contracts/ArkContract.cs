@@ -11,7 +11,7 @@ namespace NArk.Abstractions.Contracts;
 
 public abstract class ArkContract(OutputDescriptor server)
 {
-    
+
     public abstract string Type { get; }
 
     public OutputDescriptor Server { get; } = server;
