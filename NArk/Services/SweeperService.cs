@@ -25,6 +25,7 @@ public class SweeperService(
     IVtxoStorage vtxoStorage,
     IIntentGenerationService intentGenerationService,
     IContractService contractService,
+    ICoinService coinService,
     IContractStorage contractStorage,
     ISpendingService spendingService,
     IOptions<SweeperServiceOptions> options,
@@ -38,11 +39,12 @@ public class SweeperService(
         IVtxoStorage vtxoStorage,
         IIntentGenerationService intentGenerationService,
         IContractService contractService,
+        ICoinService coinService,
         IContractStorage contractStorage,
         ISpendingService spendingService,
         IOptions<SweeperServiceOptions> options,
         ILogger<SweeperService> logger)
-            : this(feeEstimator, clientTransport, policies, vtxoStorage, intentGenerationService, contractService, contractStorage, spendingService, options, [], logger)
+            : this(feeEstimator, clientTransport, policies, vtxoStorage, intentGenerationService, contractService, coinService, contractStorage, spendingService, options, [], logger)
     {
     }
     
@@ -53,10 +55,11 @@ public class SweeperService(
         IVtxoStorage vtxoStorage,
         IIntentGenerationService intentGenerationService,
         IContractService contractService,
+        ICoinService coinService,
         IContractStorage contractStorage,
         ISpendingService spendingService,
         IOptions<SweeperServiceOptions> options)
-        : this(feeEstimator, clientTransport, policies, vtxoStorage, intentGenerationService, contractService, contractStorage, spendingService, options, [], null)
+        : this(feeEstimator, clientTransport, policies, vtxoStorage, intentGenerationService, contractService, coinService, contractStorage, spendingService, options, [], null)
     {
     }
 
@@ -107,32 +110,26 @@ public class SweeperService(
             contracts = await contractStorage.LoadActiveContracts(cancellationToken: cancellationToken);
         var matchingVtxos =
             await vtxoStorage.GetVtxosByScripts([.. contracts.Select(c => c.Script)], false, cancellationToken);
-        var coins = matchingVtxos.Join(contracts, v => v.Script, c => c.Script,
-                (vtxo, entity) => GetUnspendableCoin(vtxo, entity, _serverInfo!),
-                StringComparer.InvariantCultureIgnoreCase)
-            .ToArray();
-        await ExecutePoliciesAsync(coins);
+        var transformedCoins = await GetCoins(matchingVtxos).ToListAsync(cancellationToken);
+        await ExecutePoliciesAsync(transformedCoins);
+    }
+
+    private async IAsyncEnumerable<ArkCoin> GetCoins(IReadOnlyCollection<ArkVtxo> coins)
+    {
+        foreach (var coin in coins)
+            yield return await coinService.GetCoin(coin);
     }
 
     private async Task TrySweepVtxos(IReadOnlyCollection<ArkVtxo> vtxos, CancellationToken cancellationToken)
     {
         var unspentVtxos = vtxos.Where(v => !v.IsSpent()).ToArray();
-        var matchingContracts =
-            await contractStorage.LoadContractsByScripts([.. unspentVtxos.Select(x => x.Script)],
-                cancellationToken);
-        var coins =
-            unspentVtxos
-                .Join(matchingContracts, v => v.Script, c => c.Script,
-                    (vtxo, entity) => GetUnspendableCoin(vtxo, entity, _serverInfo!),
-                    StringComparer.InvariantCultureIgnoreCase
-                )
-                .ToArray();
-        await ExecutePoliciesAsync(coins);
+        var transformedCoins = await GetCoins(unspentVtxos).ToListAsync(cancellationToken: cancellationToken);
+        await ExecutePoliciesAsync(transformedCoins);
     }
 
-    private async Task ExecutePoliciesAsync(IReadOnlyCollection<ArkUnspendableCoin> coins)
+    private async Task ExecutePoliciesAsync(IReadOnlyCollection<ArkCoin> coins)
     {
-        Dictionary<OutPoint, PriorityQueue<ArkCoin, int>> outpointToCoins = new();
+        HashSet<ArkCoin> coinsToSweep = [];
 
         foreach (var policy in policies)
         {
@@ -140,42 +137,51 @@ public class SweeperService(
 
             await foreach (var coin in policy.SweepAsync(coins))
             {
-                if (!outpointToCoins.TryGetValue(coin.Outpoint, out var priorityQueue))
-                    outpointToCoins[coin.Outpoint] = new PriorityQueue<ArkCoin, int>([(coin, 1)]);
-                else
-                    priorityQueue.Enqueue(coin, priorityQueue.Count);
+                coinsToSweep.Add(coin);
             }
         }
 
-        await Sweep(outpointToCoins);
+        await Sweep(coinsToSweep);
     }
 
-    private async Task Sweep(Dictionary<OutPoint, PriorityQueue<ArkCoin, int>> outpointToCoins)
+    private async Task Sweep(HashSet<ArkCoin> coinsToSweep)
     {
         var recoverablesByWallet = new Dictionary<string, HashSet<ArkCoin>>();
 
-        logger?.LogDebug("Starting sweep for {OutpointCount} outpoints", outpointToCoins.Count);
-        foreach (var (outpoint, possiblePaths) in outpointToCoins)
+        logger?.LogDebug("Starting sweep for {OutpointCount} coins", coinsToSweep.Count);
+        foreach (var coin in coinsToSweep)
         {
-            if (possiblePaths.Count == 0)
+            if (coin.Recoverable)
             {
-                logger?.LogWarning("No sweep paths available for outpoint {Outpoint}", outpoint);
-                continue;
-            }
-
-            var firstPath = possiblePaths.Peek();
-
-            if (firstPath.Recoverable)
-            {
-                if (recoverablesByWallet.TryGetValue(firstPath.WalletIdentifier, out var recoverables))
-                    recoverables.Add(firstPath);
+                if (recoverablesByWallet.TryGetValue(coin.WalletIdentifier, out var recoverables))
+                    recoverables.Add(coin);
                 else
-                    recoverablesByWallet[firstPath.WalletIdentifier] = [firstPath];
+                    recoverablesByWallet[coin.WalletIdentifier] = [coin];
             }
             else
             {
-                await TrySweepOutpoint(outpoint, possiblePaths);
+                try
+                {
+                    var txId = await spendingService.Spend(coin.WalletIdentifier, [coin], [],
+                        CancellationToken.None);
+                    logger?.LogInformation("Sweep successful for outpoint {Outpoint}, txId: {TxId}", coin.Outpoint, txId);
+                    await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(coin, txId,
+                        ActionState.Successful, null));
+                    return;
+                }
+                catch (AlreadyLockedVtxoException ex)
+                {
+                    logger?.LogWarning(0, ex, "Sweep skipped for outpoint {Outpoint}: vtxo is already locked", coin.Outpoint);
+                    await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(coin, null,
+                        ActionState.Failed, "Vtxo is already locked by another process."));
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    logger?.LogDebug(0, ex, "Sweep path failed for outpoint {Outpoint}", coin.Outpoint);
+                }
             }
+            
         }
 
         foreach (var (walletId, coins) in recoverablesByWallet)
@@ -215,54 +221,6 @@ public class SweeperService(
             ),
             true
         );
-    }
-
-    private async Task TrySweepOutpoint(OutPoint outpoint, PriorityQueue<ArkCoin, int> possiblePaths)
-    {
-        while (possiblePaths.TryDequeue(out var possiblePath, out _))
-        {
-
-            try
-            {
-                var txId = await spendingService.Spend(possiblePath.WalletIdentifier, [possiblePath], [],
-                    CancellationToken.None);
-                logger?.LogInformation("Sweep successful for outpoint {Outpoint}, txId: {TxId}", outpoint, txId);
-                await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(possiblePath, txId,
-                    ActionState.Successful, null));
-                return;
-            }
-            catch (AlreadyLockedVtxoException ex)
-            {
-                logger?.LogWarning(0, ex, "Sweep skipped for outpoint {Outpoint}: vtxo is already locked", outpoint);
-                await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(possiblePath, null,
-                    ActionState.Failed, "Vtxo is already locked by another process."));
-                return;
-            }
-            catch (Exception ex)
-            {
-                if (possiblePaths.Count == 0)
-                {
-                    logger?.LogError(0, ex, "All sweep paths failed for outpoint {Outpoint}", outpoint);
-                    await postSweepHandlers.SafeHandleEventAsync(new PostSweepActionEvent(possiblePath, null,
-                        ActionState.Failed, $"All sweeping paths failed, ex: {ex}"));
-                }
-                else
-                {
-                    logger?.LogDebug(0, ex, "Sweep path failed for outpoint {Outpoint}, trying next path ({RemainingPaths} remaining)", outpoint, possiblePaths.Count);
-                }
-            }
-        }
-    }
-
-    private static ArkUnspendableCoin GetUnspendableCoin(ArkVtxo vtxo, ArkContractEntity contract,
-        ArkServerInfo serverInfo)
-    {
-        var parsedContract = ArkContractParser.Parse(contract.Type, contract.AdditionalData, serverInfo.Network);
-        if (parsedContract is null)
-            throw new UnableToSignUnknownContracts(
-                $"Could not parse contract belonging to vtxo {vtxo.TransactionId}:{vtxo.TransactionOutputIndex}");
-        return new ArkUnspendableCoin(contract.WalletIdentifier, parsedContract, vtxo.CreatedAt, vtxo.ExpiresAt, vtxo.ExpiresAtHeight,
-            vtxo.OutPoint, vtxo.TxOut, vtxo.Recoverable);
     }
 
     private void OnContractsChanged(object? sender, ArkContractEntity e) =>

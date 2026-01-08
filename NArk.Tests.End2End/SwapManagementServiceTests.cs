@@ -13,6 +13,7 @@ using NArk.Swaps.Boltz.Models;
 using NArk.Swaps.Models;
 using NArk.Swaps.Policies;
 using NArk.Swaps.Services;
+using NArk.Swaps.Transformers;
 using NArk.Tests.End2End.Common;
 using NArk.Tests.End2End.TestPersistance;
 using NArk.Transformers;
@@ -112,7 +113,7 @@ public class SwapManagementServiceTests
 
         
         var coinService = new CoinService(testingPrerequisite.clientTransport, testingPrerequisite.contracts,
-            [new PaymentContractTransformer(), new HashLockedContractTransformer()]);
+            [new PaymentContractTransformer(), new HashLockedContractTransformer(), new VHTLCContractTransformer(testingPrerequisite.wallet)]);
 
         var signingService = new SigningService(testingPrerequisite.inMemoryKeyStorage);
 
@@ -134,8 +135,8 @@ public class SwapManagementServiceTests
             coinService,
             testingPrerequisite.contractService, testingPrerequisite.clientTransport, new DefaultCoinSelector(), testingPrerequisite.safetyService, intentStorage);
         await using var sweepMgr = new SweeperService(new DefaultFeeEstimator(testingPrerequisite.clientTransport), testingPrerequisite.clientTransport,
-            [new SwapSweepPolicy(testingPrerequisite.wallet, swapStorage)], testingPrerequisite.vtxoStorage,
-            intentGeneration, testingPrerequisite.contractService, testingPrerequisite.contracts, spendingService, new OptionsWrapper<SweeperServiceOptions>(new SweeperServiceOptions() { ForceRefreshInterval = TimeSpan.Zero }), null);
+            [new SwapSweepPolicy()], testingPrerequisite.vtxoStorage,
+            intentGeneration, testingPrerequisite.contractService, coinService, testingPrerequisite.contracts, spendingService, new OptionsWrapper<SweeperServiceOptions>(new SweeperServiceOptions() { ForceRefreshInterval = TimeSpan.Zero }));
         await sweepMgr.StartAsync(CancellationToken.None);
         await using var swapMgr = new SwapsManagementService(
             spendingService,
