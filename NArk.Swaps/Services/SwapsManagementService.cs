@@ -363,7 +363,7 @@ public class SwapsManagementService : IAsyncDisposable
         
         var addressProvider = await _walletProvider.GetAddressProviderAsync(walletId, cancellationToken);
         var swap = await _boltzService.CreateSubmarineSwap(invoice,
-            await addressProvider!.GetNewSigningDescriptor(walletId, cancellationToken),
+            await addressProvider!.GetNextSigningDescriptor(walletId, cancellationToken),
             cancellationToken);
         await _swapsStorage.SaveSwap(
             walletId,
@@ -440,7 +440,7 @@ public class SwapsManagementService : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         var addressProvider = await _walletProvider.GetAddressProviderAsync(walletId, cancellationToken);
-        var destinationDescriptor = await addressProvider!.GetNewSigningDescriptor(walletId, cancellationToken);
+        var destinationDescriptor = await addressProvider!.GetNextSigningDescriptor(walletId, cancellationToken);
         var revSwap =
             await _boltzService.CreateReverseSwap(
                 invoiceParams,

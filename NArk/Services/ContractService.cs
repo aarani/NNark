@@ -31,14 +31,11 @@ public class ContractService(
     public async Task<ArkContract> DerivePaymentContract(string walletId, CancellationToken cancellationToken = default)
     {
         logger?.LogDebug("Deriving payment contract for wallet {WalletId}", walletId);
-        var info = await transport.GetServerInfoAsync(cancellationToken);
+      
         var addressProvider = await walletProvider.GetAddressProviderAsync(walletId, cancellationToken);
-        var signingDescriptor = await addressProvider!.GetNewSigningDescriptor(walletId, cancellationToken);
-        var contract = new ArkPaymentContract(
-            info.SignerKey,
-            info.UnilateralExit,
-            signingDescriptor
-        );
+        
+        var contract = await addressProvider!.GetNextPaymentContract(walletId, cancellationToken);
+     
         await contractStorage.SaveContract(walletId, contract.ToEntity(walletId), cancellationToken);
         await eventHandlers.SafeHandleEventAsync(new NewContractActionEvent(contract, walletId), cancellationToken);
         logger?.LogInformation("Derived payment contract for wallet {WalletId}", walletId);

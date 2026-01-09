@@ -115,46 +115,32 @@ public static class AppExtensions
 
         public ArkApplicationBuilder OnMainnet()
         {
-            _hostBuilder.ConfigureServices(services =>
-            {
-                services.AddSingleton<IClientTransport, GrpcClientTransport>(_ =>
-                    new GrpcClientTransport("https://arkade.computer")
-                );
-                services.Configure<BoltzClientOptions>(b =>
-                {
-                    b.BoltzUrl = "https://api.ark.boltz.exchange/";
-                    b.WebsocketUrl = "https://api.ark.boltz.exchange/";
-                });
-            });
-
+            _hostBuilder.ConfigureServices(services => services.AddArkNetwork(ArkNetworkConfig.Mainnet));
             return this;
         }
 
         public ArkApplicationBuilder OnRegtest()
         {
-            _hostBuilder.ConfigureServices(services =>
-            {
-                services.AddSingleton<IClientTransport, GrpcClientTransport>(_ =>
-                    new GrpcClientTransport("http://localhost:7070")
-                );
-                services.Configure<BoltzClientOptions>(b =>
-                {
-                    b.BoltzUrl = "http://localhost:9001/";
-                    b.WebsocketUrl = "http://localhost:9001/";
-                });
-            });
+            _hostBuilder.ConfigureServices(services => services.AddArkNetwork(ArkNetworkConfig.Regtest));
+            return this;
+        }
+
+        public ArkApplicationBuilder OnMutinynet()
+        {
+            _hostBuilder.ConfigureServices(services => services.AddArkNetwork(ArkNetworkConfig.Mutinynet));
+            return this;
+        }
+
+        public ArkApplicationBuilder OnNetwork(ArkNetworkConfig config)
+        {
+            _hostBuilder.ConfigureServices(services => services.AddArkNetwork(config));
             return this;
         }
 
         public ArkApplicationBuilder OnCustomGrpcArk(string arkUrl)
         {
             _hostBuilder.ConfigureServices(services =>
-            {
-                services.AddSingleton<IClientTransport, GrpcClientTransport>(_ =>
-                    new GrpcClientTransport(arkUrl)
-                );
-            });
-
+                services.AddArkNetwork(new ArkNetworkConfig(arkUrl), configureBoltz: false));
             return this;
         }
 
@@ -168,24 +154,7 @@ public static class AppExtensions
                     b.WebsocketUrl = websocketUrl ?? boltzUrl;
                 });
             });
-
             return EnableSwaps();
-        }
-
-        public ArkApplicationBuilder OnMutinynet()
-        {
-            _hostBuilder.ConfigureServices(services =>
-            {
-                services.AddSingleton<IClientTransport, GrpcClientTransport>(_ =>
-                    new GrpcClientTransport("https://mutinynet.arkade.money")
-                );
-                services.Configure<BoltzClientOptions>(b =>
-                {
-                    b.BoltzUrl = "https://api.boltz.mutinynet.arkade.sh/";
-                    b.WebsocketUrl = "https://api.boltz.mutinynet.arkade.sh/";
-                });
-            });
-            return this;
         }
 
         public ArkApplicationBuilder EnableSwaps(Action<BoltzClientOptions>? boltzOptionsConfigure = null)
@@ -197,10 +166,8 @@ public static class AppExtensions
                     services.Configure(boltzOptionsConfigure);
                 }
 
-                services
-                    .AddHttpClient<BoltzClient>()
-                    .Services.AddSingleton<SwapsManagementService>();
-                services.AddSingleton<ISweepPolicy, SwapSweepPolicy>();
+                services.AddHttpClient<BoltzClient>();
+                services.AddArkSwapServices();
             });
             return this;
         }

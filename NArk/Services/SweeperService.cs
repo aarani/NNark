@@ -133,8 +133,6 @@ public class SweeperService(
 
         foreach (var policy in policies)
         {
-            if (!policy.CanSweep(coins)) continue;
-
             await foreach (var coin in policy.SweepAsync(coins))
             {
                 coinsToSweep.Add(coin);

@@ -28,3 +28,12 @@ public enum ArkSwapType
     ReverseSubmarine,
     Submarine
 }
+
+public static class SwapExtensions
+{
+    public static  bool IsActive(this ArkSwapStatus swapStatus)
+    {
+        return swapStatus is ArkSwapStatus.Pending or ArkSwapStatus.Unknown;
+     }
+    
+}

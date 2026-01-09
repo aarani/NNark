@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using NArk.Abstractions;
 using NArk.Abstractions.Fees;
@@ -7,11 +8,47 @@ using NArk.Fees;
 using NArk.Services;
 using NArk.Sweeper;
 using NArk.Swaps.Abstractions;
+using NArk.Swaps.Boltz.Models;
 using NArk.Swaps.Policies;
 using NArk.Swaps.Services;
 using NArk.Transformers;
+using NArk.Transport;
+using NArk.Transport.GrpcClient;
 
 namespace NArk.Hosting;
+
+/// <summary>
+/// Network configuration for Ark services.
+/// Contains URIs for Ark server, Arkade wallet, and Boltz swap service.
+/// </summary>
+public record ArkNetworkConfig(
+    [property: JsonPropertyName("ark")]
+    string ArkUri,
+
+    [property: JsonPropertyName("arkade-wallet")]
+    string? ArkadeWalletUri = null,
+
+    [property: JsonPropertyName("boltz")]
+    string? BoltzUri = null)
+{
+    /// <summary>Mainnet configuration.</summary>
+    public static readonly ArkNetworkConfig Mainnet = new(
+        ArkUri: "https://arkade.computer",
+        ArkadeWalletUri: "https://arkade.money",
+        BoltzUri: "https://api.ark.boltz.exchange/");
+
+    /// <summary>Mutinynet (signet) configuration.</summary>
+    public static readonly ArkNetworkConfig Mutinynet = new(
+        ArkUri: "https://mutinynet.arkade.sh",
+        ArkadeWalletUri: "https://mutinynet.arkade.money",
+        BoltzUri: "https://api.boltz.mutinynet.arkade.sh/");
+
+    /// <summary>Local regtest configuration.</summary>
+    public static readonly ArkNetworkConfig Regtest = new(
+        ArkUri: "http://localhost:7070",
+        ArkadeWalletUri: "http://localhost:3002",
+        BoltzUri: "http://localhost:9001/");
+}
 
 /// <summary>
 /// Extension methods for registering NArk services with IServiceCollection.
@@ -57,4 +94,49 @@ public static class ServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Registers the Ark network configuration and configures transport services.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="config">The network configuration.</param>
+    /// <param name="configureBoltz">If true and BoltzUri is set, configures Boltz client options. Default is true.</param>
+    public static IServiceCollection AddArkNetwork(this IServiceCollection services, ArkNetworkConfig config, bool configureBoltz = true)
+    {
+        // Register the config itself for injection
+        services.AddSingleton(config);
+
+        // Register transport (includes deadline interceptor by default)
+        services.AddSingleton<IClientTransport>(_ => new GrpcClientTransport(config.ArkUri));
+
+        // Configure Boltz if URI is provided
+        if (configureBoltz && !string.IsNullOrWhiteSpace(config.BoltzUri))
+        {
+            services.Configure<BoltzClientOptions>(options =>
+            {
+                options.BoltzUrl = config.BoltzUri;
+                options.WebsocketUrl = config.BoltzUri;
+            });
+        }
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers mainnet Ark network configuration.
+    /// </summary>
+    public static IServiceCollection AddArkMainnet(this IServiceCollection services)
+        => services.AddArkNetwork(ArkNetworkConfig.Mainnet);
+
+    /// <summary>
+    /// Registers Mutinynet Ark network configuration.
+    /// </summary>
+    public static IServiceCollection AddArkMutinynet(this IServiceCollection services)
+        => services.AddArkNetwork(ArkNetworkConfig.Mutinynet);
+
+    /// <summary>
+    /// Registers regtest Ark network configuration.
+    /// </summary>
+    public static IServiceCollection AddArkRegtest(this IServiceCollection services)
+        => services.AddArkNetwork(ArkNetworkConfig.Regtest);
 }

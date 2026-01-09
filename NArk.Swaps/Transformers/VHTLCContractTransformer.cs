@@ -16,15 +16,14 @@ public class VHTLCContractTransformer(IWalletProvider walletProvider): IContract
         if (contract is not VHTLCContract htlc) return false;
 
         var addressProvider = await walletProvider.GetAddressProviderAsync(walletIdentifier);
-        var fingerprint = await addressProvider!.GetWalletFingerprint();
         
-        if (htlc.Preimage is not null && OutputDescriptorHelpers.GetFingerprint(htlc.Receiver).Equals(fingerprint, StringComparison.InvariantCultureIgnoreCase))
+        if (htlc.Preimage is not null && await addressProvider!.IsOurs(htlc.Receiver))
         {
             return true;
         }
 
         if (htlc.RefundLocktime.IsTimeLock &&
-            htlc.RefundLocktime.Date < DateTime.UtcNow && OutputDescriptorHelpers.GetFingerprint(htlc.Sender).Equals(fingerprint, StringComparison.InvariantCultureIgnoreCase))
+            htlc.RefundLocktime.Date < DateTime.UtcNow && await addressProvider!.IsOurs(htlc.Sender))
         {
             return true;
         }
@@ -37,16 +36,15 @@ public class VHTLCContractTransformer(IWalletProvider walletProvider): IContract
         var htlc = contract as VHTLCContract;
         
         var addressProvider = await walletProvider.GetAddressProviderAsync(walletIdentifier);
-        var fingerprint = await addressProvider!.GetWalletFingerprint();
         
-        if (htlc!.Preimage is not null && OutputDescriptorHelpers.GetFingerprint(htlc.Receiver).Equals(fingerprint, StringComparison.InvariantCultureIgnoreCase))
+        if (htlc!.Preimage is not null &&  await addressProvider!.IsOurs(htlc.Receiver))
         {
             return new ArkCoin(walletIdentifier, htlc, vtxo.CreatedAt, vtxo.ExpiresAt, vtxo.ExpiresAtHeight, vtxo.OutPoint, vtxo.TxOut, htlc.Receiver,
                 htlc.CreateClaimScript(), new WitScript(Op.GetPushOp(htlc.Preimage!)), null, null, vtxo.Recoverable);
         }
 
         if (htlc.RefundLocktime.IsTimeLock &&
-            htlc.RefundLocktime.Date < DateTime.UtcNow && OutputDescriptorHelpers.GetFingerprint(htlc.Sender).Equals(fingerprint, StringComparison.InvariantCultureIgnoreCase))
+            htlc.RefundLocktime.Date < DateTime.UtcNow && await addressProvider!.IsOurs(htlc.Sender))
         {
             return new ArkCoin(walletIdentifier, htlc, vtxo.CreatedAt, vtxo.ExpiresAt, vtxo.ExpiresAtHeight, vtxo.OutPoint, vtxo.TxOut, htlc.Receiver,
                 htlc.CreateRefundWithoutReceiverScript(), null, htlc.RefundLocktime, null, vtxo.Recoverable);

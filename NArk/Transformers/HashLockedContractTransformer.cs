@@ -1,16 +1,32 @@
 using NArk.Abstractions;
 using NArk.Abstractions.Contracts;
 using NArk.Abstractions.VTXOs;
+using NArk.Abstractions.Wallets;
 using NArk.Contracts;
 using NBitcoin;
 
 namespace NArk.Transformers;
 
-public class HashLockedContractTransformer: IContractTransformer
+public class HashLockedContractTransformer(IWalletProvider walletProvider): IContractTransformer
 {
     public async Task<bool> CanTransform(string walletIdentifier, ArkContract contract, ArkVtxo vtxo)
     {
-        return contract is HashLockedArkPaymentContract;
+        if (contract is not HashLockedArkPaymentContract hashLockedArkPaymentContract)
+            return false;
+
+        if (hashLockedArkPaymentContract.User is null)
+            return true;
+        
+        if(await walletProvider.GetAddressProviderAsync(walletIdentifier) is not {} addressProvider)
+            return false;
+
+        if(!await addressProvider.IsOurs(hashLockedArkPaymentContract.User))
+            return false;
+
+        if(await walletProvider.GetSignerAsync(walletIdentifier) is not {} signer)
+            return false;
+        
+        return true;
     }
 
     public async Task<ArkCoin> Transform(string walletIdentifier, ArkContract contract, ArkVtxo vtxo)
