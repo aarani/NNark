@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NArk.Abstractions.Blockchain;
@@ -10,13 +10,7 @@ using NArk.Abstractions.Wallets;
 using NArk.Events;
 using NArk.Models.Options;
 using NArk.Swaps.Abstractions;
-using NArk.Swaps.Boltz.Client;
 using NArk.Swaps.Boltz.Models;
-using NArk.Swaps.Policies;
-using NArk.Swaps.Services;
-using NArk.Sweeper;
-using NArk.Transport;
-using NArk.Transport.GrpcClient;
 
 namespace NArk.Hosting;
 
@@ -27,6 +21,10 @@ public static class AppExtensions
         return new ArkApplicationBuilder(builder);
     }
 
+    /// <summary>
+    /// Fluent builder for configuring NArk services with IHostBuilder.
+    /// For IServiceCollection-only scenarios, use the extension methods in ServiceCollectionExtensions directly.
+    /// </summary>
     public class ArkApplicationBuilder : IHostBuilder
     {
         private readonly IHostBuilder _hostBuilder;
@@ -44,68 +42,77 @@ public static class AppExtensions
         public ArkApplicationBuilder WithSweeperForceRefreshInterval(TimeSpan interval)
         {
             _hostBuilder.ConfigureServices(services =>
-                services.Configure<SweeperServiceOptions>(o => { o.ForceRefreshInterval = interval; }));
-
+                services.ConfigureArkSweeperInterval(interval));
             return this;
         }
 
         public ArkApplicationBuilder WithSafetyService<TSafety>() where TSafety : class, ISafetyService
         {
-            _hostBuilder.ConfigureServices(services => { services.AddSingleton<ISafetyService, TSafety>(); });
+            _hostBuilder.ConfigureServices(services =>
+                services.AddArkSafetyService<TSafety>());
             return this;
         }
 
         public ArkApplicationBuilder WithVtxoStorage<TStorage>() where TStorage : class, IVtxoStorage
         {
-            _hostBuilder.ConfigureServices(services => { services.AddSingleton<IVtxoStorage, TStorage>(); });
+            _hostBuilder.ConfigureServices(services =>
+                services.AddArkVtxoStorage<TStorage>());
             return this;
         }
 
         public ArkApplicationBuilder WithKeyStorage<TStorage>() where TStorage : class, IKeyStorage
         {
-            _hostBuilder.ConfigureServices(services => { services.AddSingleton<IKeyStorage, TStorage>(); });
+            _hostBuilder.ConfigureServices(services =>
+                services.AddArkKeyStorage<TStorage>());
             return this;
         }
 
         public ArkApplicationBuilder WithWalletStorage<TStorage>() where TStorage : class, IWalletStorage
         {
-            _hostBuilder.ConfigureServices(services => { services.AddSingleton<IWalletStorage, TStorage>(); });
+            _hostBuilder.ConfigureServices(services =>
+                services.AddArkWalletStorage<TStorage>());
             return this;
         }
 
         public ArkApplicationBuilder WithIntentStorage<TStorage>() where TStorage : class, IIntentStorage
         {
-            _hostBuilder.ConfigureServices(services => { services.AddSingleton<IIntentStorage, TStorage>(); });
+            _hostBuilder.ConfigureServices(services =>
+                services.AddArkIntentStorage<TStorage>());
             return this;
         }
 
         public ArkApplicationBuilder WithSwapStorage<TStorage>() where TStorage : class, ISwapStorage
         {
-            _hostBuilder.ConfigureServices(services => { services.AddSingleton<ISwapStorage, TStorage>(); });
+            _hostBuilder.ConfigureServices(services =>
+                services.AddArkSwapStorage<TStorage>());
             return this;
         }
 
         public ArkApplicationBuilder WithContractStorage<TStorage>() where TStorage : class, IContractStorage
         {
-            _hostBuilder.ConfigureServices(services => { services.AddSingleton<IContractStorage, TStorage>(); });
+            _hostBuilder.ConfigureServices(services =>
+                services.AddArkContractStorage<TStorage>());
             return this;
         }
 
         public ArkApplicationBuilder WithWallet<TWallet>() where TWallet : class, IWallet
         {
-            _hostBuilder.ConfigureServices(services => { services.AddSingleton<IWallet, TWallet>(); });
+            _hostBuilder.ConfigureServices(services =>
+                services.AddArkWallet<TWallet>());
             return this;
         }
 
         public ArkApplicationBuilder WithIntentScheduler<TScheduler>() where TScheduler : class, IIntentScheduler
         {
-            _hostBuilder.ConfigureServices(services => { services.AddSingleton<IIntentScheduler, TScheduler>(); });
+            _hostBuilder.ConfigureServices(services =>
+                services.AddArkIntentScheduler<TScheduler>());
             return this;
         }
 
         public ArkApplicationBuilder WithTimeProvider<TTime>() where TTime : class, IChainTimeProvider
         {
-            _hostBuilder.ConfigureServices(services => { services.AddSingleton<IChainTimeProvider, TTime>(); });
+            _hostBuilder.ConfigureServices(services =>
+                services.AddArkTimeProvider<TTime>());
             return this;
         }
 
@@ -114,54 +121,28 @@ public static class AppExtensions
             where THandler : class, IEventHandler<TEvent>
         {
             _hostBuilder.ConfigureServices(services =>
-            {
-                services.AddTransient<IEventHandler<TEvent>, THandler>();
-            });
+                services.AddArkEventHandler<TEvent, THandler>());
             return this;
         }
 
         public ArkApplicationBuilder OnMainnet()
         {
             _hostBuilder.ConfigureServices(services =>
-            {
-                services.AddSingleton<IClientTransport, GrpcClientTransport>(_ =>
-                    new GrpcClientTransport("https://arkade.computer")
-                );
-                services.Configure<BoltzClientOptions>(b =>
-                {
-                    b.BoltzUrl = "https://api.ark.boltz.exchange/";
-                    b.WebsocketUrl = "https://api.ark.boltz.exchange/";
-                });
-            });
-
+                services.AddArkMainnet());
             return this;
         }
 
         public ArkApplicationBuilder OnRegtest()
         {
             _hostBuilder.ConfigureServices(services =>
-            {
-                services.AddSingleton<IClientTransport, GrpcClientTransport>(_ =>
-                    new GrpcClientTransport("http://localhost:7070")
-                );
-                services.Configure<BoltzClientOptions>(b =>
-                {
-                    b.BoltzUrl = "http://localhost:9001/";
-                    b.WebsocketUrl = "http://localhost:9001/";
-                });
-            });
+                services.AddArkRegtest());
             return this;
         }
 
         public ArkApplicationBuilder OnCustomGrpcArk(string arkUrl)
         {
             _hostBuilder.ConfigureServices(services =>
-            {
-                services.AddSingleton<IClientTransport, GrpcClientTransport>(_ =>
-                    new GrpcClientTransport(arkUrl)
-                );
-            });
-
+                services.AddArkCustomGrpc(arkUrl));
             return this;
         }
 
@@ -169,48 +150,27 @@ public static class AppExtensions
         {
             _hostBuilder.ConfigureServices(services =>
             {
-                services.Configure<BoltzClientOptions>(b =>
-                {
-                    b.BoltzUrl = boltzUrl;
-                    b.WebsocketUrl = websocketUrl ?? boltzUrl;
-                });
+                services.AddArkCustomBoltz(boltzUrl, websocketUrl);
+                services.AddArkSwaps();
             });
-
-            return EnableSwaps();
+            return this;
         }
 
         public ArkApplicationBuilder OnMutinynet()
         {
             _hostBuilder.ConfigureServices(services =>
-            {
-                services.AddSingleton<IClientTransport, GrpcClientTransport>(_ =>
-                    new GrpcClientTransport("https://mutinynet.arkade.money")
-                );
-                services.Configure<BoltzClientOptions>(b =>
-                {
-                    b.BoltzUrl = "https://api.boltz.mutinynet.arkade.sh/";
-                    b.WebsocketUrl = "https://api.boltz.mutinynet.arkade.sh/";
-                });
-            });
+                services.AddArkMutinynet());
             return this;
         }
 
         public ArkApplicationBuilder EnableSwaps(Action<BoltzClientOptions>? boltzOptionsConfigure = null)
         {
             _hostBuilder.ConfigureServices(services =>
-            {
-                if (boltzOptionsConfigure != null)
-                {
-                    services.Configure(boltzOptionsConfigure);
-                }
-
-                services
-                    .AddHttpClient<BoltzClient>()
-                    .Services.AddSingleton<SwapsManagementService>();
-                services.AddSingleton<ISweepPolicy, SwapSweepPolicy>();
-            });
+                services.AddArkSwaps(boltzOptionsConfigure));
             return this;
         }
+
+        #region IHostBuilder Implementation
 
         public IHostBuilder ConfigureHostConfiguration(Action<IConfigurationBuilder> configureDelegate)
         {
@@ -253,5 +213,7 @@ public static class AppExtensions
         }
 
         public IDictionary<object, object> Properties => _hostBuilder.Properties;
+
+        #endregion
     }
 }
