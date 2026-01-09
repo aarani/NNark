@@ -50,9 +50,7 @@ public class IntentSchedulerTests
             { Threshold = TimeSpan.FromHours(2), ThresholdHeight = 2000 }));
 
         var intentStorage = new InMemoryIntentStorage();
-
-        var signingService = new SigningService(walletDetails.inMemoryKeyStorage);
-
+        
         var options =
             new OptionsWrapper<IntentGenerationServiceOptions>(
                 new IntentGenerationServiceOptions() { PollInterval = TimeSpan.FromMinutes(5) }
@@ -77,7 +75,7 @@ public class IntentSchedulerTests
         var coinService = new CoinService(walletDetails.clientTransport, walletDetails.contracts,
             [new PaymentContractTransformer(), new HashLockedContractTransformer()]);
         await using var intentGeneration = new IntentGenerationService(walletDetails.clientTransport,
-            new DefaultFeeEstimator(walletDetails.clientTransport), coinService, signingService, intentStorage, walletDetails.safetyService,
+            new DefaultFeeEstimator(walletDetails.clientTransport), coinService, walletDetails.walletProvider, intentStorage, walletDetails.safetyService,
             walletDetails.contracts, walletDetails.vtxoStorage, scheduler,
             options);
         await using var intentSync = new IntentSynchronizationService(intentStorage, walletDetails.clientTransport, walletDetails.safetyService);

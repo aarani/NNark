@@ -63,16 +63,14 @@ public class SwapManagementServiceTests
         var intentStorage = new InMemoryIntentStorage();
         var coinService = new CoinService(testingPrerequisite.clientTransport, testingPrerequisite.contracts,
             [new PaymentContractTransformer(), new HashLockedContractTransformer()]);
-
-        var signingService = new SigningService(testingPrerequisite.inMemoryKeyStorage);
         await using var swapMgr = new SwapsManagementService(
             new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
-                signingService,
+                testingPrerequisite.walletProvider,
                 coinService,
                 testingPrerequisite.contractService, testingPrerequisite.clientTransport, new DefaultCoinSelector(), testingPrerequisite.safetyService, intentStorage),
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
-            testingPrerequisite.wallet,
-            swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, signingService, intentStorage, boltzClient);
+            testingPrerequisite.walletProvider,
+            swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, intentStorage, boltzClient);
 
         var settledSwapTcs = new TaskCompletionSource();
 
@@ -84,7 +82,7 @@ public class SwapManagementServiceTests
 
         await swapMgr.StartAsync(CancellationToken.None);
         await swapMgr.InitiateSubmarineSwap(
-            "wallet1",
+            testingPrerequisite.walletIdentifier,
             BOLT11PaymentRequest.Parse((await _app.ResourceCommands.ExecuteCommandAsync("lnd", "create-long-invoice"))
                 .ErrorMessage!, Network.RegTest),
             true,
@@ -113,10 +111,8 @@ public class SwapManagementServiceTests
 
         
         var coinService = new CoinService(testingPrerequisite.clientTransport, testingPrerequisite.contracts,
-            [new PaymentContractTransformer(), new HashLockedContractTransformer(), new VHTLCContractTransformer(testingPrerequisite.wallet)]);
-
-        var signingService = new SigningService(testingPrerequisite.inMemoryKeyStorage);
-
+            [new PaymentContractTransformer(), new HashLockedContractTransformer(), new VHTLCContractTransformer(testingPrerequisite.walletProvider)]);
+        
         // The threshold is so high, it will force an intent generation
         var scheduler = new SimpleIntentScheduler(new DefaultFeeEstimator(testingPrerequisite.clientTransport), testingPrerequisite.clientTransport, testingPrerequisite.contractService,
             new ChainTimeProvider(Network.RegTest, _app.GetEndpoint("nbxplorer", "http")),
@@ -126,12 +122,12 @@ public class SwapManagementServiceTests
 
         
         await using var intentGeneration = new IntentGenerationService(testingPrerequisite.clientTransport,
-            new DefaultFeeEstimator(testingPrerequisite.clientTransport), coinService, signingService, intentStorage, testingPrerequisite.safetyService,
+            new DefaultFeeEstimator(testingPrerequisite.clientTransport), coinService, testingPrerequisite.walletProvider, intentStorage, testingPrerequisite.safetyService,
             testingPrerequisite.contracts, testingPrerequisite.vtxoStorage, scheduler,
             options);
 
         var spendingService = new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
-            signingService,
+            testingPrerequisite.walletProvider,
             coinService,
             testingPrerequisite.contractService, testingPrerequisite.clientTransport, new DefaultCoinSelector(), testingPrerequisite.safetyService, intentStorage);
         await using var sweepMgr = new SweeperService(new DefaultFeeEstimator(testingPrerequisite.clientTransport), testingPrerequisite.clientTransport,
@@ -141,8 +137,8 @@ public class SwapManagementServiceTests
         await using var swapMgr = new SwapsManagementService(
             spendingService,
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
-            testingPrerequisite.wallet,
-            swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, signingService, intentStorage, boltzClient);
+            testingPrerequisite.walletProvider,
+            swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, intentStorage, boltzClient);
 
         var settledSwapTcs = new TaskCompletionSource();
 
@@ -154,7 +150,7 @@ public class SwapManagementServiceTests
 
         await swapMgr.StartAsync(CancellationToken.None);
         var invoice = await swapMgr.InitiateReverseSwap(
-            "wallet1",
+            testingPrerequisite.walletIdentifier,
             new CreateInvoiceParams(LightMoney.Satoshis(50000), "Test", TimeSpan.FromHours(1)),
             CancellationToken.None
         );
@@ -178,17 +174,16 @@ public class SwapManagementServiceTests
             new OptionsWrapper<BoltzClientOptions>(new BoltzClientOptions()
             { BoltzUrl = boltzApi.ToString(), WebsocketUrl = boltzWs.ToString() }));
         var intentStorage = new InMemoryIntentStorage();
-        var signingService = new SigningService(testingPrerequisite.inMemoryKeyStorage);
         var coinService = new CoinService(testingPrerequisite.clientTransport, testingPrerequisite.contracts,
             [new PaymentContractTransformer(), new HashLockedContractTransformer()]);
         await using var swapMgr = new SwapsManagementService(
             new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
-                signingService,
+                testingPrerequisite.walletProvider,
                 coinService,
                 testingPrerequisite.contractService, testingPrerequisite.clientTransport, new DefaultCoinSelector(), testingPrerequisite.safetyService, intentStorage),
             testingPrerequisite.clientTransport, testingPrerequisite.vtxoStorage,
-            testingPrerequisite.wallet,
-            swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, signingService, intentStorage, boltzClient);
+            testingPrerequisite.walletProvider,
+            swapStorage, testingPrerequisite.contractService, testingPrerequisite.contracts, testingPrerequisite.safetyService, intentStorage, boltzClient);
 
         var refundedSwapTcs = new TaskCompletionSource();
 
@@ -203,7 +198,7 @@ public class SwapManagementServiceTests
         var invoice = (await _app.ResourceCommands.ExecuteCommandAsync("lnd", "create-invoice"))
             .ErrorMessage!;
         var swapId = await swapMgr.InitiateSubmarineSwap(
-            "wallet1",
+            testingPrerequisite.walletIdentifier,
             BOLT11PaymentRequest.Parse(invoice, Network.RegTest),
             false,
             CancellationToken.None
@@ -212,7 +207,7 @@ public class SwapManagementServiceTests
         // wait for invoice to expire
         await Task.Delay(TimeSpan.FromSeconds(30));
 
-        await swapMgr.PayExistingSubmarineSwap("wallet1", swapId, CancellationToken.None);
+        await swapMgr.PayExistingSubmarineSwap(testingPrerequisite.walletIdentifier, swapId, CancellationToken.None);
 
         await refundedSwapTcs.Task.WaitAsync(TimeSpan.FromMinutes(2));
     }

@@ -9,14 +9,15 @@ using NBitcoin;
 
 namespace NArk.Swaps.Transformers;
 
-public class VHTLCContractTransformer(IWallet wallet): IContractTransformer
+public class VHTLCContractTransformer(IWalletProvider walletProvider): IContractTransformer
 {
     public async Task<bool> CanTransform(string walletIdentifier, ArkContract contract, ArkVtxo vtxo)
     {
         if (contract is not VHTLCContract htlc) return false;
-        
-        var fingerprint = await wallet.GetWalletFingerprint(walletIdentifier);
 
+        var addressProvider = await walletProvider.GetAddressProviderAsync(walletIdentifier);
+        var fingerprint = await addressProvider!.GetWalletFingerprint(walletIdentifier);
+        
         if (htlc.Preimage is not null && OutputDescriptorHelpers.GetFingerprint(htlc.Receiver).Equals(fingerprint, StringComparison.InvariantCultureIgnoreCase))
         {
             return true;
@@ -35,8 +36,9 @@ public class VHTLCContractTransformer(IWallet wallet): IContractTransformer
     {
         var htlc = contract as VHTLCContract;
         
-        var fingerprint = await wallet.GetWalletFingerprint(walletIdentifier);
-
+        var addressProvider = await walletProvider.GetAddressProviderAsync(walletIdentifier);
+        var fingerprint = await addressProvider!.GetWalletFingerprint(walletIdentifier);
+        
         if (htlc!.Preimage is not null && OutputDescriptorHelpers.GetFingerprint(htlc.Receiver).Equals(fingerprint, StringComparison.InvariantCultureIgnoreCase))
         {
             return new ArkCoin(walletIdentifier, htlc, vtxo.CreatedAt, vtxo.ExpiresAt, vtxo.ExpiresAtHeight, vtxo.OutPoint, vtxo.TxOut, htlc.Receiver,

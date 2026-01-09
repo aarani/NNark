@@ -9,22 +9,22 @@ using NArk.Transport;
 namespace NArk.Services;
 
 public class ContractService(
-    IWallet wallet,
+    IWalletProvider walletProvider,
     IContractStorage contractStorage,
     IClientTransport transport,
     IEnumerable<IEventHandler<NewContractActionEvent>> eventHandlers,
     ILogger<ContractService>? logger = null) : IContractService
 {
-    public ContractService(IWallet wallet,
+    public ContractService(IWalletProvider walletProvider,
         IContractStorage contractStorage,
-        IClientTransport transport) : this(wallet, contractStorage, transport, [], null)
+        IClientTransport transport) : this(walletProvider, contractStorage, transport, [], null)
     {
     }
 
-    public ContractService(IWallet wallet,
+    public ContractService(IWalletProvider walletProvider,
         IContractStorage contractStorage,
         IClientTransport transport,
-        ILogger<ContractService> logger) : this(wallet, contractStorage, transport, [], logger)
+        ILogger<ContractService> logger) : this(walletProvider, contractStorage, transport, [], logger)
     {
     }
 
@@ -32,7 +32,8 @@ public class ContractService(
     {
         logger?.LogDebug("Deriving payment contract for wallet {WalletId}", walletId);
         var info = await transport.GetServerInfoAsync(cancellationToken);
-        var signingDescriptor = await wallet.GetNewSigningDescriptor(walletId, cancellationToken);
+        var addressProvider = await walletProvider.GetAddressProviderAsync(walletId, cancellationToken);
+        var signingDescriptor = await addressProvider!.GetNewSigningDescriptor(walletId, cancellationToken);
         var contract = new ArkPaymentContract(
             info.SignerKey,
             info.UnilateralExit,

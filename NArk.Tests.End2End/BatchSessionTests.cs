@@ -76,15 +76,14 @@ public class BatchSessionTests
             }
         };
 
-        var signingService = new SigningService(walletDetails.inMemoryKeyStorage);
-
         var intentGenerationOptions = new OptionsWrapper<IntentGenerationServiceOptions>(new IntentGenerationServiceOptions()
         { PollInterval = TimeSpan.FromHours(5) });
 
+        
         await using var intentGeneration = new IntentGenerationService(walletDetails.clientTransport,
             new DefaultFeeEstimator(walletDetails.clientTransport),
             coinService,
-            signingService,
+            walletDetails.walletProvider,
             intentStorage,
             walletDetails.safetyService,
             walletDetails.contracts, walletDetails.vtxoStorage, scheduler,
@@ -101,7 +100,7 @@ public class BatchSessionTests
 
         await using var batchManager = new BatchManagementService(intentStorage,
             walletDetails.clientTransport, walletDetails.vtxoStorage,
-            signingService, coinService, walletDetails.safetyService);
+            walletDetails.walletProvider, coinService, walletDetails.safetyService);
 
         await batchManager.StartAsync(CancellationToken.None);
 

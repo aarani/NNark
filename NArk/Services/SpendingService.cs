@@ -5,6 +5,7 @@ using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
 
 using NArk.Abstractions.VTXOs;
+using NArk.Abstractions.Wallets;
 using NArk.Enums;
 using NArk.Events;
 using NArk.Extensions;
@@ -18,8 +19,8 @@ namespace NArk.Services;
 public class SpendingService(
     IVtxoStorage vtxoStorage,
     IContractStorage contractStorage,
-    ISigningService signingService,
     ICoinService coinService,
+    IWalletProvider walletProvider,
     IContractService paymentService,
     IClientTransport transport,
     ICoinSelector coinSelector,
@@ -31,20 +32,20 @@ public class SpendingService(
 
     public SpendingService(IVtxoStorage vtxoStorage,
         IContractStorage contractStorage,
-        ISigningService signingService,
+        IWalletProvider walletProvider,
         ICoinService coinService,
         IContractService paymentService,
         IClientTransport transport,
         ICoinSelector coinSelector,
         ISafetyService safetyService,
         IIntentStorage intentStorage)
-        : this(vtxoStorage, contractStorage, signingService, coinService, paymentService, transport, coinSelector, safetyService, intentStorage, [], null)
+        : this(vtxoStorage, contractStorage, coinService, walletProvider, paymentService, transport, coinSelector, safetyService, intentStorage, [], null)
     {
     }
 
     public SpendingService(IVtxoStorage vtxoStorage,
         IContractStorage contractStorage,
-        ISigningService signingService,
+        IWalletProvider walletProvider,
         ICoinService coinService,
         IContractService paymentService,
         IClientTransport transport,
@@ -52,7 +53,7 @@ public class SpendingService(
         ISafetyService safetyService,
         IIntentStorage intentStorage,
         ILogger<SpendingService> logger)
-        : this(vtxoStorage, contractStorage, signingService, coinService, paymentService, transport, coinSelector, safetyService, intentStorage, [], logger)
+        : this(vtxoStorage, contractStorage, coinService, walletProvider, paymentService, transport, coinSelector, safetyService, intentStorage, [], logger)
     {
     }
 
@@ -99,7 +100,7 @@ public class SpendingService(
                 outputs = [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!), .. outputs];
             }
 
-            var transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(transport, safetyService, signingService, intentStorage);
+            var transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(transport, safetyService, walletProvider, intentStorage);
 
             var txId = await transactionBuilder.ConstructAndSubmitArkTransaction(inputs, outputs, cancellationToken);
 
@@ -228,7 +229,7 @@ public class SpendingService(
                 outputs = [new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(change), changeAddress!), .. outputs];
             }
 
-            var transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(transport, safetyService, signingService, intentStorage);
+            var transactionBuilder = new TransactionHelpers.ArkTransactionBuilder(transport, safetyService, walletProvider, intentStorage);
 
             var txId = await transactionBuilder.ConstructAndSubmitArkTransaction(selectedCoins, outputs, cancellationToken);
 

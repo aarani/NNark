@@ -9,7 +9,6 @@ using NArk.Services;
 using NArk.Tests.End2End.TestPersistance;
 using NArk.Transformers;
 using NArk.Transport.GrpcClient;
-using NArk.Wallets;
 using NBitcoin;
 using DefaultCoinSelector = NArk.CoinSelector.DefaultCoinSelector;
 
@@ -64,12 +63,10 @@ public class VtxoSynchronizationTests
         };
 
         // Create a new wallet
-        var inMemoryWalletStorage = new InMemoryWalletStorage();
-        var inMemoryKeyStorage = new InMemoryKeyStorage();
         var contracts = new InMemoryContractStorage();
         var safetyService = new AsyncSafetyService();
-        var wallet = new SimpleSeedWallet(safetyService, clientTransport, inMemoryWalletStorage, inMemoryKeyStorage);
-        await wallet.CreateNewWallet("wallet1");
+        var wallet = new InMemoryWalletProvider(clientTransport);
+        var fp = await wallet.CreateTestWallet();
 
         // Start vtxo synchronization service
         await using var vtxoSync = new VtxoSynchronizationService(
@@ -82,13 +79,13 @@ public class VtxoSynchronizationTests
         var contractService = new ContractService(wallet, contracts, clientTransport);
 
         // Generate a new payment contract, save to storage
-        var signer = await wallet.GetNewSigningDescriptor("wallet1");
+        var signer = await ((await wallet.GetAddressProviderAsync(fp))!).GetNewSigningDescriptor(fp);
         var contract = new ArkPaymentContract(
             info.SignerKey,
             info.UnilateralExit,
             signer
         );
-        await contractService.ImportContract("wallet1", contract);
+        await contractService.ImportContract(fp, contract);
 
         await Cli.Wrap("docker")
             .WithArguments([
@@ -108,19 +105,17 @@ public class VtxoSynchronizationTests
         var clientTransport = new GrpcClientTransport(_app.GetEndpoint("ark", "arkd").ToString());
 
         // Create a new wallet
-        var inMemoryWalletStorage = new InMemoryWalletStorage();
-        var inMemoryKeyStorage = new InMemoryKeyStorage();
+        var inMemoryWalletProvider = new InMemoryWalletProvider(clientTransport);
         var contracts = new InMemoryContractStorage();
 
         var vtxoStorage = new InMemoryVtxoStorage();
 
         var safetyService = new AsyncSafetyService();
 
-        var wallet = new SimpleSeedWallet(safetyService, clientTransport, inMemoryWalletStorage, inMemoryKeyStorage);
-        await wallet.CreateNewWallet("wallet1");
-        await wallet.CreateNewWallet("wallet2");
+        var fp1= await inMemoryWalletProvider.CreateTestWallet();
+        var fp2 = await inMemoryWalletProvider.CreateTestWallet();
 
-        var contractService = new ContractService(wallet, contracts, clientTransport);
+        var contractService = new ContractService(inMemoryWalletProvider, contracts, clientTransport);
 
         // Start vtxo synchronization service
         await using var vtxoSync = new VtxoSynchronizationService(
@@ -130,7 +125,7 @@ public class VtxoSynchronizationTests
         );
         await vtxoSync.StartAsync(CancellationToken.None);
 
-        var contract = await contractService.DerivePaymentContract("wallet1");
+        var contract = await contractService.DerivePaymentContract(fp1);
         var wallet1Address = contract.GetArkAddress();
 
         // Pay a random amount to the contract address
@@ -161,7 +156,7 @@ public class VtxoSynchronizationTests
         await receiveTcs.Task.WaitAsync(TimeSpan.FromSeconds(15));
 
         // Generate a new payment contract to receive funds from first wallet, save to storage
-        var contract2 = await contractService.DerivePaymentContract("wallet2");
+        var contract2 = await contractService.DerivePaymentContract(fp2);
         var wallet2Address = contract2.GetArkAddress();
 
         
@@ -169,9 +164,9 @@ public class VtxoSynchronizationTests
             [new PaymentContractTransformer(), new HashLockedContractTransformer()]);
 
         var spendingService = new SpendingService(vtxoStorage, contracts,
-            new SigningService(inMemoryKeyStorage), coinService, contractService, clientTransport, new DefaultCoinSelector(), safetyService, new InMemoryIntentStorage());
+            inMemoryWalletProvider, coinService, contractService, clientTransport, new DefaultCoinSelector(), safetyService, new InMemoryIntentStorage());
 
-        await spendingService.Spend("wallet1",
+        await spendingService.Spend(fp1,
         [
             new ArkTxOut(ArkTxOutType.Vtxo, Money.Satoshis(randomAmount / 2), wallet2Address)
         ]);

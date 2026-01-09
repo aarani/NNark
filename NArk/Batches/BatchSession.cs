@@ -23,7 +23,7 @@ namespace NArk.Batches;
 /// </summary>
 public class BatchSession(
     IClientTransport clientTransport,
-    ISigningService signingService,
+    IWalletProvider walletProvider,
     TransactionHelpers.ArkTransactionBuilder arkTransactionBuilder,
     Network network,
     ArkIntent arkIntent,
@@ -162,7 +162,7 @@ public class BatchSession(
 
 
         // Create a signing session
-        var session = new TreeSignerSession(signingService, vtxoGraph, sweepTapTreeRoot, _outputDescriptor, sharedOutput.Value);
+        var session = new TreeSignerSession(walletProvider, vtxoGraph, sweepTapTreeRoot, _outputDescriptor, sharedOutput.Value);
 
         // Generate and submit nonces
         var nonces = await session.GetNoncesAsync(cancellationToken);

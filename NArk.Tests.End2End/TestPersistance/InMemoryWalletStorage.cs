@@ -1,32 +1,28 @@
 using System.Collections.Concurrent;
 using NArk.Abstractions.Wallets;
+using NArk.Tests.End2End.Wallets;
+using NArk.Transport;
 
 namespace NArk.Tests.End2End.TestPersistance;
 
-public class InMemoryWalletStorage : IWalletStorage
+public class InMemoryWalletProvider(IClientTransport transport) : IWalletProvider
 {
-    private readonly ConcurrentDictionary<string, ArkWallet> _wallets = new();
+    private readonly ConcurrentDictionary<string, SimpleSeedWallet> _wallets = new();
 
-    public Task<IReadOnlySet<ArkWallet>> LoadAllWallets(CancellationToken cancellationToken = default)
+    public async Task<string> CreateTestWallet()
     {
-        return Task.FromResult<IReadOnlySet<ArkWallet>>(_wallets.Values.ToHashSet());
+        var wallet = await SimpleSeedWallet.CreateNewWallet(transport, CancellationToken.None);
+        _wallets.TryAdd(await wallet.GetWalletFingerprint(), wallet);
+        return await wallet.GetWalletFingerprint();
+    }
+    
+    public async Task<IArkadeWalletSigner?> GetSignerAsync(string identifier, CancellationToken cancellationToken = default)
+    {
+        return _wallets.GetValueOrDefault(identifier);
     }
 
-    public Task<ArkWallet> LoadWallet(string walletIdentifierOrFingerprint, CancellationToken cancellationToken = default)
+    public async Task<IArkadeAddressProvider?> GetAddressProviderAsync(string identifier, CancellationToken cancellationToken = default)
     {
-        if (_wallets.TryGetValue(walletIdentifierOrFingerprint, out var wallet))
-            return Task.FromResult(wallet);
-
-        return
-            Task.FromResult(_wallets
-                .Values
-                .First(w => w.WalletFingerprint == walletIdentifierOrFingerprint));
-    }
-
-    public Task SaveWallet(string walletId, ArkWallet arkWallet, string? walletFingerprint = null,
-        CancellationToken cancellationToken = default)
-    {
-        _wallets[walletId] = arkWallet;
-        return Task.CompletedTask;
+        return _wallets.GetValueOrDefault(identifier);
     }
 }

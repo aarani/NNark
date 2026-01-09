@@ -8,15 +8,14 @@ using NArk.Swaps.Helpers;
 using NArk.Tests.End2End.TestPersistance;
 using NArk.Transport;
 using NArk.Transport.GrpcClient;
-using NArk.Wallets;
-
 namespace NArk.Tests.End2End.Common;
 
 internal static class FundedWalletHelper
 {
-    internal static async Task<(AsyncSafetyService safetyService, InMemoryKeyStorage inMemoryKeyStorage, InMemoryWalletStorage inMemoryWalletStorage,
+    internal static async Task<(AsyncSafetyService safetyService, InMemoryWalletProvider walletProvider,
+            string walletIdentifier,
             InMemoryVtxoStorage vtxoStorage, ContractService contractService, InMemoryContractStorage contracts,
-            SimpleSeedWallet wallet, IClientTransport clientTransport, VtxoSynchronizationService vtxoSync)>
+            IClientTransport clientTransport, VtxoSynchronizationService vtxoSync)>
         GetFundedWallet(DistributedApplication app)
     {
         var receivedFirstVtxoTcs = new TaskCompletionSource();
@@ -27,12 +26,10 @@ internal static class FundedWalletHelper
         var info = await clientTransport.GetServerInfoAsync();
 
         // Create a new wallet
-        var inMemoryWalletStorage = new InMemoryWalletStorage();
+        var walletProvider = new InMemoryWalletProvider(clientTransport);
         var contracts = new InMemoryContractStorage();
         var safetyService = new AsyncSafetyService();
-        var keychain = new InMemoryKeyStorage();
-        var wallet = new SimpleSeedWallet(safetyService, clientTransport, inMemoryWalletStorage, keychain);
-        await wallet.CreateNewWallet("wallet1");
+        var fp1 = await walletProvider.CreateTestWallet();
 
         // Start vtxo synchronization service
         var vtxoSync = new VtxoSynchronizationService(
@@ -42,16 +39,16 @@ internal static class FundedWalletHelper
         );
         await vtxoSync.StartAsync(CancellationToken.None);
 
-        var contractService = new ContractService(wallet, contracts, clientTransport);
+        var contractService = new ContractService(walletProvider, contracts, clientTransport);
 
         // Generate a new payment contract, save to storage
-        var signer = await wallet.GetNewSigningDescriptor("wallet1");
+        var signer = await (await walletProvider.GetAddressProviderAsync(fp1)).GetNewSigningDescriptor(fp1);
         var contract = new ArkPaymentContract(
             info.SignerKey,
             info.UnilateralExit,
             signer
         );
-        await contractService.ImportContract("wallet1", contract);
+        await contractService.ImportContract(fp1, contract);
 
         // Pay a random amount to the contract address
         const int randomAmount = 500000;
@@ -64,7 +61,7 @@ internal static class FundedWalletHelper
 
         await receivedFirstVtxoTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        return (safetyService, keychain, inMemoryWalletStorage, vtxoStorage, contractService, contracts, wallet, clientTransport,
+        return (safetyService, walletProvider, fp1, vtxoStorage, contractService, contracts, clientTransport,
             vtxoSync);
     }
 }

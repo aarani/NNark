@@ -1,5 +1,6 @@
 using System.Text;
 using NArk.Abstractions.Batches;
+using NArk.Abstractions.Wallets;
 using NBitcoin;
 using NBitcoin.Protocol;
 using NBitcoin.Secp256k1;
@@ -87,5 +88,27 @@ public static class PsbtHelpers
         var (keyBytes, valueBytes) = GetTaprootLeafScript(spendInfo, leafScript);
         input.Unknown[keyBytes] = valueBytes;
     }
+    
+    public static async Task SignAndFillPsbt(IArkadeWalletSigner signer, ArkCoin coin, PSBT psbt, TaprootReadyPrecomputedTransactionData precomputedTransactionData,
+        TaprootSigHash sigHash = TaprootSigHash.Default, CancellationToken cancellationToken = default)
+    {
+        var psbtInput = coin.FillPsbtInput(psbt);
+
+        if (psbtInput is null)
+            return;
+
+        var gtx = psbt.GetGlobalTransaction();
+        var hash = gtx.GetSignatureHashTaproot(precomputedTransactionData,
+            new TaprootExecutionData((int)psbtInput.Index, coin.SpendingScript.LeafHash)
+            {
+                SigHash = sigHash
+            });
+        
+        var (pubKey, sig) = await signer.Sign(coin.SignerDescriptor, hash, cancellationToken);
+
+        psbtInput.SetTaprootScriptSpendSignature(pubKey, coin.SpendingScript.LeafHash, sig);
+    }
+
+    
 
 }

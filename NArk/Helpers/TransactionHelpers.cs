@@ -1,9 +1,10 @@
 using NArk.Abstractions;
 using NArk.Abstractions.Contracts;
+using NArk.Abstractions.Helpers;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
 using NArk.Abstractions.Scripts;
-
+using NArk.Abstractions.Wallets;
 using NArk.Contracts;
 using NArk.Models;
 using NArk.Scripts;
@@ -23,7 +24,7 @@ public static class TransactionHelpers
     public class ArkTransactionBuilder(
         IClientTransport clientTransport,
         ISafetyService safetyService,
-        ISigningService signingService,
+        IWalletProvider walletProvider,
         IIntentStorage intentStorage)
     {
         private async Task<PSBT> FinalizeCheckpointTx(PSBT checkpointTx, PSBT receivedCheckpointTx, ArkCoin coin,
@@ -35,7 +36,10 @@ public static class TransactionHelpers
                 checkpointGtx.PrecomputeTransactionData([coin.TxOut]);
 
             receivedCheckpointTx.UpdateFrom(checkpointTx);
-            await signingService.SignAndFillPsbt(coin, receivedCheckpointTx, checkpointPrecomputedTransactionData,
+
+            var signer = await walletProvider.GetSignerAsync(coin.WalletIdentifier, cancellationToken);
+            
+            await PsbtHelpers.SignAndFillPsbt(signer!, coin, receivedCheckpointTx, checkpointPrecomputedTransactionData,
                 cancellationToken: cancellationToken);
 
             return receivedCheckpointTx;
@@ -177,7 +181,8 @@ public static class TransactionHelpers
 
             foreach (var (_, coin) in sortedCheckpointCoins)
             {
-                await signingService.SignAndFillPsbt(coin, tx, precomputedTransactionData, cancellationToken: cancellationToken);
+                var signer = await walletProvider.GetSignerAsync(coin.WalletIdentifier, cancellationToken);
+                await PsbtHelpers.SignAndFillPsbt(signer!, coin, tx, precomputedTransactionData, cancellationToken: cancellationToken);
             }
 
             //reorder the checkpoints to match the order of the inputs of the Ark transaction
@@ -351,7 +356,9 @@ public static class TransactionHelpers
             var precomputedTransactionData =
                 gtx.PrecomputeTransactionData(sortedCheckpointCoins.OrderBy(x => x.Key).Select(x => x.Value).ToArray());
 
-            await signingService.SignAndFillPsbt(coin, forfeitTx, precomputedTransactionData, sighash, cancellationToken);
+            var signer = await walletProvider.GetSignerAsync(coin.WalletIdentifier, cancellationToken);
+            
+            await PsbtHelpers.SignAndFillPsbt(signer!, coin, forfeitTx, precomputedTransactionData, sighash, cancellationToken);
 
             return forfeitTx;
         }

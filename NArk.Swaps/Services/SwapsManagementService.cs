@@ -29,7 +29,7 @@ public class SwapsManagementService : IAsyncDisposable
     private readonly SpendingService _spendingService;
     private readonly IClientTransport _clientTransport;
     private readonly IVtxoStorage _vtxoStorage;
-    private readonly IWallet _wallet;
+    private readonly IWalletProvider _walletProvider;
     private readonly ISwapStorage _swapsStorage;
     private readonly IContractService _contractService;
     private readonly IContractStorage _contractStorage;
@@ -55,12 +55,11 @@ public class SwapsManagementService : IAsyncDisposable
         SpendingService spendingService,
         IClientTransport clientTransport,
         IVtxoStorage vtxoStorage,
-        IWallet wallet,
+        IWalletProvider walletProvider,
         ISwapStorage swapsStorage,
         IContractService contractService,
         IContractStorage contractStorage,
         ISafetyService safetyService,
-        ISigningService signingService,
         IIntentStorage intentStorage,
         BoltzClient boltzClient
     )
@@ -68,7 +67,7 @@ public class SwapsManagementService : IAsyncDisposable
         _spendingService = spendingService;
         _clientTransport = clientTransport;
         _vtxoStorage = vtxoStorage;
-        _wallet = wallet;
+        _walletProvider = walletProvider;
         _swapsStorage = swapsStorage;
         _contractService = contractService;
         _contractStorage = contractStorage;
@@ -79,7 +78,7 @@ public class SwapsManagementService : IAsyncDisposable
             _clientTransport
         );
         _transactionBuilder =
-            new TransactionHelpers.ArkTransactionBuilder(clientTransport, safetyService, signingService, intentStorage);
+            new TransactionHelpers.ArkTransactionBuilder(clientTransport, safetyService, walletProvider, intentStorage);
 
         swapsStorage.SwapsChanged += OnSwapsChanged;
         // It is possible to listen for vtxos on scripts and use them to figure out the state of swaps
@@ -361,9 +360,10 @@ public class SwapsManagementService : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         var serverInfo = await _clientTransport.GetServerInfoAsync(cancellationToken);
-        var refundDescriptor = await _wallet.GetNewSigningDescriptor(walletId, cancellationToken);
+        
+        var addressProvider = await _walletProvider.GetAddressProviderAsync(walletId, cancellationToken);
         var swap = await _boltzService.CreateSubmarineSwap(invoice,
-            refundDescriptor,
+            await addressProvider!.GetNewSigningDescriptor(walletId, cancellationToken),
             cancellationToken);
         await _swapsStorage.SaveSwap(
             walletId,
@@ -439,7 +439,8 @@ public class SwapsManagementService : IAsyncDisposable
     public async Task<string> InitiateReverseSwap(string walletId, CreateInvoiceParams invoiceParams,
         CancellationToken cancellationToken = default)
     {
-        var destinationDescriptor = await _wallet.GetNewSigningDescriptor(walletId, cancellationToken);
+        var addressProvider = await _walletProvider.GetAddressProviderAsync(walletId, cancellationToken);
+        var destinationDescriptor = await addressProvider!.GetNewSigningDescriptor(walletId, cancellationToken);
         var revSwap =
             await _boltzService.CreateReverseSwap(
                 invoiceParams,

@@ -11,6 +11,7 @@ using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
 
 using NArk.Abstractions.VTXOs;
+using NArk.Abstractions.Wallets;
 using NArk.Batches;
 using NArk.Enums;
 using NArk.Events;
@@ -29,7 +30,7 @@ public class BatchManagementService(
     IIntentStorage intentStorage,
     IClientTransport clientTransport,
     IVtxoStorage vtxoStorage,
-    ISigningService signingService,
+    IWalletProvider walletProvider,
     ICoinService coinService,
     ISafetyService safetyService,
     IEnumerable<IEventHandler<PostBatchSessionEvent>> eventHandlers,
@@ -384,8 +385,8 @@ public class BatchManagementService(
                 // Create and initialize a batch session
                 var session = new BatchSession(
                     clientTransport,
-                    signingService,
-                    new TransactionHelpers.ArkTransactionBuilder(clientTransport, safetyService, signingService, intentStorage),
+                    walletProvider,
+                    new TransactionHelpers.ArkTransactionBuilder(clientTransport, safetyService, walletProvider, intentStorage),
                     serverInfo.Network,
                     intent,
                     [.. spendableCoins],
@@ -544,21 +545,21 @@ public class BatchManagementService(
     public BatchManagementService(IIntentStorage intentStorage,
         IClientTransport clientTransport,
         IVtxoStorage vtxoStorage,
-        ISigningService signingService,
+        IWalletProvider walletProvider,
         ICoinService coinService,
         ISafetyService safetyService)
-        : this(intentStorage, clientTransport, vtxoStorage, signingService, coinService, safetyService, [])
+        : this(intentStorage, clientTransport, vtxoStorage, walletProvider, coinService, safetyService, [])
     {
     }
 
     public BatchManagementService(IIntentStorage intentStorage,
         IClientTransport clientTransport,
         IVtxoStorage vtxoStorage,
-        ISigningService signingService,
+        IWalletProvider walletProvider,
         ICoinService coinService,
         ISafetyService safetyService,
         ILogger<BatchManagementService> logger)
-        : this(intentStorage, clientTransport, vtxoStorage, signingService, coinService, safetyService, [], logger)
+        : this(intentStorage, clientTransport, vtxoStorage, walletProvider, coinService, safetyService, [], logger)
     {
     }
 }

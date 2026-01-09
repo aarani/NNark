@@ -31,7 +31,6 @@ public static class ServiceCollectionExtensions
         services.AddTransient<IContractTransformer, HashLockedContractTransformer>();
         services.AddSingleton<SpendingService>();
         services.AddSingleton<ISpendingService>(s => s.GetRequiredService<SpendingService>());
-        services.AddSingleton<ISigningService, SigningService>();
         services.AddSingleton<IContractService, ContractService>();
         services.AddSingleton<VtxoSynchronizationService>();
         services.AddSingleton<IntentGenerationService>();

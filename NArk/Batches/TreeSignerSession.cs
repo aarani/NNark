@@ -17,15 +17,15 @@ public class TreeSignerSession
 {
     private Dictionary<uint256, (MusigPrivNonce secNonce, MusigPubNonce pubNonce)>? _myNonces;
     private Dictionary<uint256, MusigContext>? _musigContexts;
-    private readonly ISigningService _signingService;
+    private readonly IWalletProvider _walletProvider;
     private readonly TxTree _graph;
     private readonly uint256? _tapsciptMerkleRoot;
     private readonly OutputDescriptor _descriptor;
     private readonly Money _rootSharedOutputAmount;
 
-    public TreeSignerSession(ISigningService signingService, TxTree tree, uint256? tapsciptMerkleRoot, OutputDescriptor descriptor, Money rootInputAmount)
+    public TreeSignerSession(IWalletProvider walletProvider, TxTree tree, uint256? tapsciptMerkleRoot, OutputDescriptor descriptor, Money rootInputAmount)
     {
-        _signingService = signingService;
+        _walletProvider = walletProvider;
         _graph = tree;
         _tapsciptMerkleRoot = tapsciptMerkleRoot;
         _descriptor = descriptor;
@@ -121,13 +121,14 @@ public class TreeSignerSession
         if (_myNonces != null)
             throw new InvalidOperationException("nonces already generated");
 
-        var myPrivKey = await _signingService.DerivePrivateKey(_descriptor, cancellationToken);
+        var walletIdentifier = OutputDescriptorHelpers.Extract(_descriptor).WalletId;
+        var signer = await _walletProvider.GetSignerAsync(walletIdentifier, cancellationToken);
 
         var res = new Dictionary<uint256, (MusigPrivNonce secNonce, MusigPubNonce pubNonce)>();
         foreach (var (txid, musigContext) in _musigContexts!)
         {
             // Generate nonce tied to this specific context
-            var nonce = musigContext.GenerateNonce(myPrivKey);
+            var nonce = await signer!.GenerateNonces(_descriptor, musigContext, cancellationToken);
             res[txid] = (nonce, nonce.CreatePubNonce());
         }
 
@@ -151,9 +152,12 @@ public class TreeSignerSession
         if (musigContext.AggregateNonce is null)
             throw new InvalidOperationException("missing aggregate nonce");
 
+        var walletIdentifier = OutputDescriptorHelpers.Extract(_descriptor).WalletId;
+        var signer = await _walletProvider.GetSignerAsync(walletIdentifier, cancellationToken);
+        
         // Use the wallet signer to create a MUSIG2 partial signature
         // The context already has the correct sighash from nonce generation
-        var partialSig = await _signingService.SignMusig(_descriptor, musigContext, myNonce.secNonce, cancellationToken);
+        var partialSig = await signer!.SignMusig(_descriptor, musigContext, myNonce.secNonce, cancellationToken);
 
         return partialSig;
     }

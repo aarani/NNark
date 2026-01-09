@@ -13,7 +13,6 @@ using NArk.Safety.AsyncKeyedLock;
 using NArk.Services;
 using NArk.Swaps.Helpers;
 using NArk.Tests.End2End.TestPersistance;
-using NArk.Wallets;
 using NBitcoin;
 using NBitcoin.Scripting;
 
@@ -59,10 +58,8 @@ public class OnchainTests
                 .WithIntentScheduler<SimpleIntentScheduler>()
                 .WithSwapStorage<InMemorySwapStorage>()
                 .WithContractStorage<InMemoryContractStorage>()
-                .WithKeyStorage<InMemoryKeyStorage>()
                 .WithVtxoStorage<InMemoryVtxoStorage>()
-                .WithWalletStorage<InMemoryWalletStorage>()
-                .WithWallet<SimpleSeedWallet>()
+                .WithWalletProvider<InMemoryWalletProvider>()
                 .WithTimeProvider<ChainTimeProvider>()
                 .ConfigureServices(s => s.Configure<ChainTimeProviderOptions>(o =>
                 {
@@ -82,12 +79,12 @@ public class OnchainTests
         await arkHost.StartAsync();
 
         var contractService = arkHost.Services.GetRequiredService<IContractService>();
-        var wallet = arkHost.Services.GetRequiredService<IWallet>();
+        var wallet = arkHost.Services.GetRequiredService<InMemoryWalletProvider>();
         var intentStorage = arkHost.Services.GetRequiredService<IIntentStorage>();
 
-        await wallet.CreateNewWallet("wallet1");
-        await wallet.CreateNewWallet("wallet2");
-        var contract = await contractService.DerivePaymentContract("wallet1", CancellationToken.None);
+        var fp1 =await wallet.CreateTestWallet();
+        var fp2= await wallet.CreateTestWallet();
+        var contract = await contractService.DerivePaymentContract(fp1, CancellationToken.None);
 
         await Cli.Wrap("docker")
             .WithArguments([
@@ -98,11 +95,11 @@ public class OnchainTests
 
         var destination =
             new TaprootAddress(
-                new TaprootPubKey((await wallet.GetNewSigningDescriptor("wallet2")).Extract().XOnlyPubKey!.ToBytes()), Network.RegTest);
+                new TaprootPubKey((await ((await wallet.GetAddressProviderAsync(fp2))!).GetNewSigningDescriptor(fp2)).Extract().XOnlyPubKey!.ToBytes()), Network.RegTest);
 
         var onchainService = arkHost.Services.GetRequiredService<IOnchainService>();
         await onchainService.InitiateCollaborativeExit(
-            "wallet1",
+            fp1,
             new ArkTxOut(
                 ArkTxOutType.Onchain,
                 10000UL,

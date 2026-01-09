@@ -4,10 +4,12 @@ using Microsoft.Extensions.Options;
 using NArk.Abstractions;
 using NArk.Abstractions.Contracts;
 using NArk.Abstractions.Fees;
+using NArk.Abstractions.Helpers;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
 
 using NArk.Abstractions.VTXOs;
+using NArk.Abstractions.Wallets;
 using NArk.Extensions;
 using NArk.Helpers;
 using NArk.Models;
@@ -22,7 +24,7 @@ public class IntentGenerationService(
     IClientTransport clientTransport,
     IFeeEstimator feeEstimator,
     ICoinService coinService,
-    ISigningService signingService,
+    IWalletProvider walletProvider,
     IIntentStorage intentStorage,
     ISafetyService safetyService,
     IContractStorage contractStorage,
@@ -202,7 +204,8 @@ public class IntentGenerationService(
 
         foreach (var coin in inputs)
         {
-            await signingService.SignAndFillPsbt(coin, toSignTx, precomputedTransactionData, cancellationToken: cancellationToken);
+            var signer = await walletProvider.GetSignerAsync(coin.WalletIdentifier, cancellationToken);
+            await PsbtHelpers.SignAndFillPsbt(signer!, coin, toSignTx, precomputedTransactionData, cancellationToken: cancellationToken);
         }
 
         return toSignTx;

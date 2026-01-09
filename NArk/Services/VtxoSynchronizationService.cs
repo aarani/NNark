@@ -27,8 +27,7 @@ public class VtxoSynchronizationService : IAsyncDisposable
     private readonly IClientTransport _arkClientTransport;
     private readonly ILogger<VtxoSynchronizationService>? _logger;
 
-    public VtxoSynchronizationService(IWalletStorage walletStorage,
-        IVtxoStorage vtxoStorage,
+    public VtxoSynchronizationService(IVtxoStorage vtxoStorage,
         IContractStorage contractStorage,
         IClientTransport arkClientTransport,
         ILogger<VtxoSynchronizationService> logger)

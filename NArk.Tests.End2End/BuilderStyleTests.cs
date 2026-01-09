@@ -10,7 +10,6 @@ using NArk.Models.Options;
 using NArk.Safety.AsyncKeyedLock;
 using NArk.Services;
 using NArk.Tests.End2End.TestPersistance;
-using NArk.Wallets;
 using NBitcoin;
 
 namespace NArk.Tests.End2End;
@@ -58,10 +57,8 @@ public class BuilderStyleTests
             .WithIntentScheduler<SimpleIntentScheduler>()
             .WithSwapStorage<InMemorySwapStorage>()
             .WithContractStorage<InMemoryContractStorage>()
-            .WithKeyStorage<InMemoryKeyStorage>()
+            .WithWalletProvider<InMemoryWalletProvider>()
             .WithVtxoStorage<InMemoryVtxoStorage>()
-            .WithWalletStorage<InMemoryWalletStorage>()
-            .WithWallet<SimpleSeedWallet>()
             .WithTimeProvider<ChainTimeProvider>()
             .ConfigureServices(s => s.Configure<ChainTimeProviderOptions>(o =>
             {
@@ -79,11 +76,11 @@ public class BuilderStyleTests
         await arkHost.StartAsync();
 
         var contractService = arkHost.Services.GetRequiredService<IContractService>();
-        var wallet = arkHost.Services.GetRequiredService<IWallet>();
+        var wallet = arkHost.Services.GetRequiredService<InMemoryWalletProvider>();
         var intentStorage = arkHost.Services.GetRequiredService<IIntentStorage>();
 
-        await wallet.CreateNewWallet("wallet1");
-        var contract = await contractService.DerivePaymentContract("wallet1", CancellationToken.None);
+        var fp = await wallet.CreateTestWallet();
+        var contract = await contractService.DerivePaymentContract(fp, CancellationToken.None);
 
         await Cli.Wrap("docker")
             .WithArguments([

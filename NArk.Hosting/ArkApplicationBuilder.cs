@@ -61,15 +61,14 @@ public static class AppExtensions
             return this;
         }
 
-        public ArkApplicationBuilder WithKeyStorage<TStorage>() where TStorage : class, IKeyStorage
+        public ArkApplicationBuilder WithWalletProvider<TProvider>() where TProvider : class, IWalletProvider
         {
-            _hostBuilder.ConfigureServices(services => { services.AddSingleton<IKeyStorage, TStorage>(); });
-            return this;
-        }
+            _hostBuilder.ConfigureServices(services => { services.AddSingleton<TProvider>(); });
+            _hostBuilder.ConfigureServices(services =>
+            {
+                services.AddSingleton<IWalletProvider, TProvider>(p => p.GetRequiredService<TProvider>());
+            });
 
-        public ArkApplicationBuilder WithWalletStorage<TStorage>() where TStorage : class, IWalletStorage
-        {
-            _hostBuilder.ConfigureServices(services => { services.AddSingleton<IWalletStorage, TStorage>(); });
             return this;
         }
 
@@ -88,12 +87,6 @@ public static class AppExtensions
         public ArkApplicationBuilder WithContractStorage<TStorage>() where TStorage : class, IContractStorage
         {
             _hostBuilder.ConfigureServices(services => { services.AddSingleton<IContractStorage, TStorage>(); });
-            return this;
-        }
-
-        public ArkApplicationBuilder WithWallet<TWallet>() where TWallet : class, IWallet
-        {
-            _hostBuilder.ConfigureServices(services => { services.AddSingleton<IWallet, TWallet>(); });
             return this;
         }
 
