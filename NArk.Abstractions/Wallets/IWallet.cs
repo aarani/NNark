@@ -6,6 +6,6 @@ public interface IWallet
 {
     Task CreateNewWallet(string walletIdentifier, CancellationToken cancellationToken = default);
     Task<string> GetWalletFingerprint(string walletIdentifier, CancellationToken cancellationToken = default);
-    Task<OutputDescriptor> GetNewSigningDescriptor(string walletIdentifier,
+    Task<OutputDescriptor> DeriveNextDescriptor(string walletIdentifier,
         CancellationToken cancellationToken = default);
 }

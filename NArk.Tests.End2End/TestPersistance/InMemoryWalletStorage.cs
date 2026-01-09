@@ -23,7 +23,7 @@ public class InMemoryWalletStorage : IWalletStorage
                 .First(w => w.WalletFingerprint == walletIdentifierOrFingerprint));
     }
 
-    public Task SaveWallet(string walletId, ArkWallet arkWallet, string? walletFingerprint = null,
+    public Task SaveWallet(string walletId, ArkWallet arkWallet,
         CancellationToken cancellationToken = default)
     {
         _wallets[walletId] = arkWallet;

@@ -32,7 +32,7 @@ public class ContractService(
     {
         logger?.LogDebug("Deriving payment contract for wallet {WalletId}", walletId);
         var info = await transport.GetServerInfoAsync(cancellationToken);
-        var signingDescriptor = await wallet.GetNewSigningDescriptor(walletId, cancellationToken);
+        var signingDescriptor = await wallet.DeriveNextDescriptor(walletId, cancellationToken);
         var contract = new ArkPaymentContract(
             info.SignerKey,
             info.UnilateralExit,
@@ -48,7 +48,7 @@ public class ContractService(
     {
         logger?.LogDebug("Importing contract for wallet {WalletId}", walletId);
         var info = await transport.GetServerInfoAsync(cancellationToken);
-        if (contract.Server is not null && !contract.Server.Equals(info.SignerKey))
+        if (!contract.Server.Equals(info.SignerKey))
         {
             logger?.LogWarning("Cannot import contract for wallet {WalletId}: server key mismatch", walletId);
             throw new InvalidOperationException("Cannot import contract with different server key");

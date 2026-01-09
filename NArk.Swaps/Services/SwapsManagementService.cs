@@ -361,7 +361,7 @@ public class SwapsManagementService : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         var serverInfo = await _clientTransport.GetServerInfoAsync(cancellationToken);
-        var refundDescriptor = await _wallet.GetNewSigningDescriptor(walletId, cancellationToken);
+        var refundDescriptor = await _wallet.DeriveNextDescriptor(walletId, cancellationToken);
         var swap = await _boltzService.CreateSubmarineSwap(invoice,
             refundDescriptor,
             cancellationToken);
@@ -439,7 +439,7 @@ public class SwapsManagementService : IAsyncDisposable
     public async Task<string> InitiateReverseSwap(string walletId, CreateInvoiceParams invoiceParams,
         CancellationToken cancellationToken = default)
     {
-        var destinationDescriptor = await _wallet.GetNewSigningDescriptor(walletId, cancellationToken);
+        var destinationDescriptor = await _wallet.DeriveNextDescriptor(walletId, cancellationToken);
         var revSwap =
             await _boltzService.CreateReverseSwap(
                 invoiceParams,

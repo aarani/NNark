@@ -45,7 +45,7 @@ internal static class FundedWalletHelper
         var contractService = new ContractService(wallet, contracts, clientTransport);
 
         // Generate a new payment contract, save to storage
-        var signer = await wallet.GetNewSigningDescriptor("wallet1");
+        var signer = await wallet.DeriveNextDescriptor("wallet1");
         var contract = new ArkPaymentContract(
             info.SignerKey,
             info.UnilateralExit,

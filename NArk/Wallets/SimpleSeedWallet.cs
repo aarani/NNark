@@ -28,8 +28,7 @@ public class SimpleSeedWallet(ISafetyService safetyService, IClientTransport cli
 
         await keyStorage.AddPrivateKeyAsync(walletIdentifier, extKey, cancellationToken);
         await walletStorage.SaveWallet(walletIdentifier,
-            new ArkWallet(walletIdentifier, fingerprint.ToString(), descriptor),
-            fingerprint.ToString(), cancellationToken);
+            new ArkWallet(walletIdentifier, fingerprint.ToString(), descriptor), cancellationToken);
     }
 
     public async Task<string> GetWalletFingerprint(string walletIdentifier, CancellationToken cancellationToken = default)
@@ -38,7 +37,7 @@ public class SimpleSeedWallet(ISafetyService safetyService, IClientTransport cli
         return wallet.WalletFingerprint;
     }
 
-    public async Task<OutputDescriptor> GetNewSigningDescriptor(string walletIdentifier,
+    public async Task<OutputDescriptor> DeriveNextDescriptor(string walletIdentifier,
         CancellationToken cancellationToken = default)
     {
         static OutputDescriptor GetDescriptorFromIndex(Network network, string descriptor, int index)
@@ -54,6 +53,4 @@ public class SimpleSeedWallet(ISafetyService safetyService, IClientTransport cli
             cancellationToken: cancellationToken);
         return GetDescriptorFromIndex(network, walletData.WalletDescriptor, walletData.LastAddressIndex);
     }
-
-
 }
