@@ -123,13 +123,14 @@ public class SpendingService(
     public async Task<IReadOnlySet<ArkCoin>> GetAvailableCoins(string walletId, CancellationToken cancellationToken = default)
     {
         logger?.LogDebug("Getting available coins for wallet {WalletId}", walletId);
-        var contracts = await contractStorage.LoadActiveContracts([walletId], cancellationToken);
+
+        var vtxos = await vtxoStorage.GetUnspentVtxos(cancellationToken);
+        var contracts =
+            await contractStorage.LoadContractsByScripts([..vtxos.Select(v => v.Script)], cancellationToken);
         var contractByScript =
             contracts
                 .GroupBy(c => c.Script)
                 .ToDictionary(g => g.Key, g => g.First());
-        var vtxos = await vtxoStorage.GetVtxosByScripts([.. contracts.Select(c => c.Script)],
-            cancellationToken: cancellationToken);
         var vtxosByContracts =
             vtxos
                 .GroupBy(v => contractByScript[v.Script]);

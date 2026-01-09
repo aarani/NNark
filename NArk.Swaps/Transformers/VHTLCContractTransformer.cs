@@ -16,7 +16,7 @@ public class VHTLCContractTransformer(IWalletProvider walletProvider): IContract
         if (contract is not VHTLCContract htlc) return false;
 
         var addressProvider = await walletProvider.GetAddressProviderAsync(walletIdentifier);
-        var fingerprint = await addressProvider!.GetWalletFingerprint(walletIdentifier);
+        var fingerprint = await addressProvider!.GetWalletFingerprint();
         
         if (htlc.Preimage is not null && OutputDescriptorHelpers.GetFingerprint(htlc.Receiver).Equals(fingerprint, StringComparison.InvariantCultureIgnoreCase))
         {
@@ -37,7 +37,7 @@ public class VHTLCContractTransformer(IWalletProvider walletProvider): IContract
         var htlc = contract as VHTLCContract;
         
         var addressProvider = await walletProvider.GetAddressProviderAsync(walletIdentifier);
-        var fingerprint = await addressProvider!.GetWalletFingerprint(walletIdentifier);
+        var fingerprint = await addressProvider!.GetWalletFingerprint();
         
         if (htlc!.Preimage is not null && OutputDescriptorHelpers.GetFingerprint(htlc.Receiver).Equals(fingerprint, StringComparison.InvariantCultureIgnoreCase))
         {
