@@ -1,8 +1,8 @@
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using NArk.Abstractions.Contracts;
+using NArk.Abstractions.Scripts;
 using NArk.Abstractions.VTXOs;
-using NArk.Abstractions.Wallets;
 using NArk.Transport;
 
 namespace NArk.Services;
@@ -23,33 +23,36 @@ public class VtxoSynchronizationService : IAsyncDisposable
         Channel.CreateBounded<HashSet<string>>(new BoundedChannelOptions(5));
 
     private readonly IVtxoStorage _vtxoStorage;
-    private readonly IContractStorage _contractStorage;
     private readonly IClientTransport _arkClientTransport;
+    private readonly IEnumerable<IActiveScriptsProvider> _activeScriptsProviders;
     private readonly ILogger<VtxoSynchronizationService>? _logger;
 
-    public VtxoSynchronizationService(IVtxoStorage vtxoStorage,
-        IContractStorage contractStorage,
+    public VtxoSynchronizationService(
+        IEnumerable<IActiveScriptsProvider> activeScriptsProviders,
+        IVtxoStorage vtxoStorage,
         IClientTransport arkClientTransport,
         ILogger<VtxoSynchronizationService> logger)
-        : this(vtxoStorage, contractStorage, arkClientTransport)
+        : this(vtxoStorage, arkClientTransport, activeScriptsProviders)
     {
         _logger = logger;
     }
 
     public VtxoSynchronizationService(
         IVtxoStorage vtxoStorage,
-        IContractStorage contractStorage,
-        IClientTransport arkClientTransport)
+        IClientTransport arkClientTransport, 
+        IEnumerable<IActiveScriptsProvider> activeScriptsProviders)
     {
         _vtxoStorage = vtxoStorage;
-        _contractStorage = contractStorage;
         _arkClientTransport = arkClientTransport;
+        _activeScriptsProviders = activeScriptsProviders;
 
-        _contractStorage.ContractsChanged += OnContractsChanged;
-        _vtxoStorage.VtxosChanged += OnVtxosChanged;
+        foreach (var provider in _activeScriptsProviders)
+        {
+            provider.ActiveScriptsChanged += OnActiveScriptsChanged;
+        }
     }
 
-    private async void OnVtxosChanged(object? sender, ArkVtxo v)
+    private async void OnActiveScriptsChanged(object? sender, EventArgs e)
     {
         try
         {
@@ -57,27 +60,13 @@ public class VtxoSynchronizationService : IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
-            _logger?.LogDebug("Vtxo change handler cancelled");
+            var senderStr = sender?.GetType().Name ?? "";
+            _logger?.LogDebug($"Active Script handler {senderStr} cancelled");
         }
         catch (Exception ex)
         {
-            _logger?.LogWarning(0, ex, "Error handling vtxo change event");
-        }
-    }
-
-    private async void OnContractsChanged(object? sender, ArkContractEntity e)
-    {
-        try
-        {
-            await UpdateScriptsView(_shutdownCts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            _logger?.LogDebug("Contract change handler cancelled");
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogWarning(0, ex, "Error handling contract change event");
+            var senderStr = sender?.GetType().Name ?? "";
+            _logger?.LogWarning(0, ex, $"Error handling active scripts change event from {senderStr}");
         }
     }
 
@@ -94,17 +83,8 @@ public class VtxoSynchronizationService : IAsyncDisposable
         await _viewSyncLock.WaitAsync(token);
         try
         {
-            var contracts =
-                await _contractStorage.LoadActiveContracts(null, token);
-
-            var newViewOfScripts =
-                contracts.Select(c => c.Script).ToHashSet();
-
-            foreach (var vtxo in await _vtxoStorage.GetUnspentVtxos(token))
-            {
-                newViewOfScripts.Add(vtxo.Script);
-            }
-
+            var newViewOfScripts = (await Task.WhenAll(_activeScriptsProviders.Select(p => p.GetActiveScripts(token)))).SelectMany(c => c).ToHashSet();
+            
             if (newViewOfScripts.Count == 0)
                 return;
 
@@ -180,6 +160,10 @@ public class VtxoSynchronizationService : IAsyncDisposable
         _logger?.LogDebug("Disposing VTXO synchronization service");
         await _shutdownCts.CancelAsync();
 
+        foreach (var provider in _activeScriptsProviders)
+        {
+            provider.ActiveScriptsChanged -= OnActiveScriptsChanged;
+        }
         try
         {
             if (_queryTask is not null)

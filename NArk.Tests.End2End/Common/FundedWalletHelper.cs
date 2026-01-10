@@ -34,15 +34,15 @@ internal static class FundedWalletHelper
         // Start vtxo synchronization service
         var vtxoSync = new VtxoSynchronizationService(
             vtxoStorage,
-            contracts,
-            clientTransport
+            clientTransport,
+            [vtxoStorage, contracts]
         );
         await vtxoSync.StartAsync(CancellationToken.None);
 
         var contractService = new ContractService(walletProvider, contracts, clientTransport);
 
         // Generate a new payment contract, save to storage
-        var signer = await (await walletProvider.GetAddressProviderAsync(fp1)).GetNewSigningDescriptor(fp1);
+        var signer = await (await walletProvider.GetAddressProviderAsync(fp1))!.GetNextSigningDescriptor(fp1);
         var contract = new ArkPaymentContract(
             info.SignerKey,
             info.UnilateralExit,

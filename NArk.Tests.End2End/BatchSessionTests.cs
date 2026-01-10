@@ -46,7 +46,7 @@ public class BatchSessionTests
         var walletDetails = await FundedWalletHelper.GetFundedWallet(_app);
 
         var coinService = new CoinService(walletDetails.clientTransport, walletDetails.contracts,
-            [new PaymentContractTransformer(), new HashLockedContractTransformer()]);
+            [new PaymentContractTransformer(walletDetails.walletProvider), new HashLockedContractTransformer(walletDetails.walletProvider)]);
 
         var intentStorage = new InMemoryIntentStorage();
 

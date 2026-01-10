@@ -71,15 +71,15 @@ public class VtxoSynchronizationTests
         // Start vtxo synchronization service
         await using var vtxoSync = new VtxoSynchronizationService(
             vtxoStorage,
-            contracts,
-            clientTransport
+            clientTransport,
+            [vtxoStorage, contracts]
         );
         await vtxoSync.StartAsync(CancellationToken.None);
 
         var contractService = new ContractService(wallet, contracts, clientTransport);
 
         // Generate a new payment contract, save to storage
-        var signer = await ((await wallet.GetAddressProviderAsync(fp))!).GetNewSigningDescriptor(fp);
+        var signer = await ((await wallet.GetAddressProviderAsync(fp))!).GetNextSigningDescriptor(fp);
         var contract = new ArkPaymentContract(
             info.SignerKey,
             info.UnilateralExit,
@@ -120,8 +120,8 @@ public class VtxoSynchronizationTests
         // Start vtxo synchronization service
         await using var vtxoSync = new VtxoSynchronizationService(
             vtxoStorage,
-            contracts,
-            clientTransport
+            clientTransport,
+            [vtxoStorage, contracts]
         );
         await vtxoSync.StartAsync(CancellationToken.None);
 
@@ -161,7 +161,7 @@ public class VtxoSynchronizationTests
 
         
         var coinService = new CoinService(clientTransport, contracts,
-            [new PaymentContractTransformer(), new HashLockedContractTransformer()]);
+            [new PaymentContractTransformer(inMemoryWalletProvider), new HashLockedContractTransformer(inMemoryWalletProvider)]);
 
         var spendingService = new SpendingService(vtxoStorage, contracts,
             inMemoryWalletProvider, coinService, contractService, clientTransport, new DefaultCoinSelector(), safetyService, new InMemoryIntentStorage());

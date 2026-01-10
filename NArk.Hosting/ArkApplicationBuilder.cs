@@ -5,6 +5,7 @@ using NArk.Abstractions.Blockchain;
 using NArk.Abstractions.Contracts;
 using NArk.Abstractions.Intents;
 using NArk.Abstractions.Safety;
+using NArk.Abstractions.Scripts;
 using NArk.Abstractions.VTXOs;
 using NArk.Abstractions.Wallets;
 using NArk.Events;
@@ -57,15 +58,19 @@ public static class AppExtensions
 
         public ArkApplicationBuilder WithVtxoStorage<TStorage>() where TStorage : class, IVtxoStorage
         {
-            _hostBuilder.ConfigureServices(services => { services.AddSingleton<IVtxoStorage, TStorage>(); });
+            _hostBuilder.ConfigureServices(services =>
+            {
+                services.AddSingleton<IVtxoStorage, TStorage>();
+                services.AddSingleton<IActiveScriptsProvider>(provider => provider.GetRequiredService<IVtxoStorage>());
+            });
             return this;
         }
 
         public ArkApplicationBuilder WithWalletProvider<TProvider>() where TProvider : class, IWalletProvider
         {
-            _hostBuilder.ConfigureServices(services => { services.AddSingleton<TProvider>(); });
             _hostBuilder.ConfigureServices(services =>
             {
+                services.AddSingleton<TProvider>();
                 services.AddSingleton<IWalletProvider, TProvider>(p => p.GetRequiredService<TProvider>());
             });
 
@@ -86,7 +91,11 @@ public static class AppExtensions
 
         public ArkApplicationBuilder WithContractStorage<TStorage>() where TStorage : class, IContractStorage
         {
-            _hostBuilder.ConfigureServices(services => { services.AddSingleton<IContractStorage, TStorage>(); });
+            _hostBuilder.ConfigureServices(services =>
+            {
+                services.AddSingleton<IContractStorage, TStorage>();
+                services.AddSingleton<IActiveScriptsProvider>(provider => provider.GetRequiredService<IContractStorage>()); 
+            });
             return this;
         }
 

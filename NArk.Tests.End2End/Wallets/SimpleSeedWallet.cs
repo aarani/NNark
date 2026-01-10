@@ -1,5 +1,7 @@
+using NArk.Abstractions.Contracts;
 using NArk.Abstractions.Safety;
 using NArk.Abstractions.Wallets;
+using NArk.Contracts;
 using NArk.Helpers;
 using NArk.Services;
 using NArk.Transport;
@@ -84,10 +86,16 @@ public class SimpleSeedWallet : IArkadeWalletSigner, IArkadeAddressProvider
         return identifier;
     }
 
-    public async Task<OutputDescriptor> GetNewSigningDescriptor(string identifier, CancellationToken cancellationToken = default)
+    public Task<bool> IsOurs(OutputDescriptor descriptor, CancellationToken cancellationToken = default)
+    {
+        var info = OutputDescriptorHelpers.Extract(descriptor);
+        return Task.FromResult(info.WalletId == _identifier);
+    }
+
+    public async Task<OutputDescriptor> GetNextSigningDescriptor(string identifier, CancellationToken cancellationToken = default)
     {
         if (identifier != _identifier) throw new ArgumentException(nameof(identifier));
-        
+
         static OutputDescriptor GetDescriptorFromIndex(Network network, string descriptor, int index)
         {
             return OutputDescriptor.Parse(descriptor.Replace("/*", $"/{index}"), network);
@@ -95,5 +103,12 @@ public class SimpleSeedWallet : IArkadeWalletSigner, IArkadeAddressProvider
 
         var network = (await _clientTransport.GetServerInfoAsync(cancellationToken)).Network;
         return GetDescriptorFromIndex(network, _descriptor, _lastIndex++);
+    }
+
+    public async Task<ArkContract> GetNextPaymentContract(string identifier, CancellationToken cancellationToken = default)
+    {
+        var descriptor = await GetNextSigningDescriptor(identifier, cancellationToken);
+        var serverInfo = await _clientTransport.GetServerInfoAsync(cancellationToken);
+        return new ArkPaymentContract(serverInfo.SignerKey, serverInfo.UnilateralExit, descriptor);
     }
 }

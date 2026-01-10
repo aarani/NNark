@@ -9,6 +9,7 @@ public class InMemoryVtxoStorage : IVtxoStorage
     private ConcurrentDictionary<string, ArkVtxo> _vtxos = new();
 
     public event EventHandler<ArkVtxo>? VtxosChanged;
+    public event EventHandler? ActiveScriptsChanged;
 
     public virtual Task<bool> UpsertVtxo(ArkVtxo vtxo, CancellationToken cancellationToken = default)
     {
@@ -20,7 +21,8 @@ public class InMemoryVtxoStorage : IVtxoStorage
         }
         finally
         {
-            VtxosChanged?.Invoke(null, vtxo);
+            VtxosChanged?.Invoke(this, vtxo);
+            ActiveScriptsChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 

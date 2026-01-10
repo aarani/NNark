@@ -62,7 +62,7 @@ public class SwapManagementServiceTests
             { BoltzUrl = boltzApi.ToString(), WebsocketUrl = boltzWs.ToString() }));
         var intentStorage = new InMemoryIntentStorage();
         var coinService = new CoinService(testingPrerequisite.clientTransport, testingPrerequisite.contracts,
-            [new PaymentContractTransformer(), new HashLockedContractTransformer()]);
+            [new PaymentContractTransformer(testingPrerequisite.walletProvider), new HashLockedContractTransformer(testingPrerequisite.walletProvider)]);
         await using var swapMgr = new SwapsManagementService(
             new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
                 testingPrerequisite.walletProvider,
@@ -111,7 +111,7 @@ public class SwapManagementServiceTests
 
         
         var coinService = new CoinService(testingPrerequisite.clientTransport, testingPrerequisite.contracts,
-            [new PaymentContractTransformer(), new HashLockedContractTransformer(), new VHTLCContractTransformer(testingPrerequisite.walletProvider)]);
+            [new PaymentContractTransformer(testingPrerequisite.walletProvider), new HashLockedContractTransformer(testingPrerequisite.walletProvider), new VHTLCContractTransformer(testingPrerequisite.walletProvider)]);
         
         // The threshold is so high, it will force an intent generation
         var scheduler = new SimpleIntentScheduler(new DefaultFeeEstimator(testingPrerequisite.clientTransport), testingPrerequisite.clientTransport, testingPrerequisite.contractService,
@@ -175,7 +175,7 @@ public class SwapManagementServiceTests
             { BoltzUrl = boltzApi.ToString(), WebsocketUrl = boltzWs.ToString() }));
         var intentStorage = new InMemoryIntentStorage();
         var coinService = new CoinService(testingPrerequisite.clientTransport, testingPrerequisite.contracts,
-            [new PaymentContractTransformer(), new HashLockedContractTransformer()]);
+            [new PaymentContractTransformer(testingPrerequisite.walletProvider), new HashLockedContractTransformer(testingPrerequisite.walletProvider)]);
         await using var swapMgr = new SwapsManagementService(
             new SpendingService(testingPrerequisite.vtxoStorage, testingPrerequisite.contracts,
                 testingPrerequisite.walletProvider,

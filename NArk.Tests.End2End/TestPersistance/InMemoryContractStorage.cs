@@ -7,6 +7,7 @@ public class InMemoryContractStorage : IContractStorage
     private readonly Dictionary<string, HashSet<ArkContractEntity>> _contracts = new();
 
     public event EventHandler<ArkContractEntity>? ContractsChanged;
+    public event EventHandler? ActiveScriptsChanged;
 
     public Task<IReadOnlySet<ArkContractEntity>> LoadAllContractsByWallet(string walletIdentifier,
         CancellationToken cancellationToken = default)
@@ -47,6 +48,7 @@ public class InMemoryContractStorage : IContractStorage
             else
                 _contracts[walletIdentifier] = [contractEntity];
             ContractsChanged?.Invoke(this, contractEntity);
+            ActiveScriptsChanged?.Invoke(this, EventArgs.Empty);
         }
 
         return Task.CompletedTask;

@@ -73,7 +73,7 @@ public class IntentSchedulerTests
         };
 
         var coinService = new CoinService(walletDetails.clientTransport, walletDetails.contracts,
-            [new PaymentContractTransformer(), new HashLockedContractTransformer()]);
+            [new PaymentContractTransformer(walletDetails.walletProvider), new HashLockedContractTransformer(walletDetails.walletProvider)]);
         await using var intentGeneration = new IntentGenerationService(walletDetails.clientTransport,
             new DefaultFeeEstimator(walletDetails.clientTransport), coinService, walletDetails.walletProvider, intentStorage, walletDetails.safetyService,
             walletDetails.contracts, walletDetails.vtxoStorage, scheduler,

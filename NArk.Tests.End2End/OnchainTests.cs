@@ -95,7 +95,7 @@ public class OnchainTests
 
         var destination =
             new TaprootAddress(
-                new TaprootPubKey((await ((await wallet.GetAddressProviderAsync(fp2))!).GetNewSigningDescriptor(fp2)).Extract().XOnlyPubKey!.ToBytes()), Network.RegTest);
+                new TaprootPubKey((await ((await wallet.GetAddressProviderAsync(fp2))!).GetNextSigningDescriptor(fp2)).Extract().XOnlyPubKey!.ToBytes()), Network.RegTest);
 
         var onchainService = arkHost.Services.GetRequiredService<IOnchainService>();
         await onchainService.InitiateCollaborativeExit(
